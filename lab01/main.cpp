@@ -68,8 +68,28 @@ public:
                 closestPoint = point;
             }
         }
-        printf("Legközelebbi pont: (%.2f, %.2f), Távolság: %.4f\n", closestPoint.x, closestPoint.y, minDist);
+        // printf("Legközelebbi pont: (%.2f, %.2f), Távolság: %.4f\n", closestPoint.x, closestPoint.y, minDist);
         return closestPoint;
+    }
+
+    void drawLine(float ndcX, float ndcY){
+        vec2 p1 = closestPoint(ndcX, ndcY);
+            line->Vtx().push_back(p1);
+
+            vec2 pl1 = line->Vtx()[line->Vtx().size()-1]; // az utolsó pont amit leraktam
+            vec2 pl2 = line->Vtx()[line->Vtx().size()-2]; // Utolsó előtti pont
+            vec2 v = pl2-pl1; // irányvektor
+
+            // irányvektorral való nyújtás
+            if(line->Vtx().size() % 2 == 0){
+                v = vec2(v.x * 10000, v.y * 10000);
+                pl1 = pl1 + v;
+                pl2 = pl2 - v ;
+            }
+
+            line->Vtx()[line->Vtx().size()-1] = pl1;
+            line->Vtx()[line->Vtx().size()-2] = pl2;
+            line->updateGPU();
     }
 
     void onMousePressed(MouseButton but, int pX, int pY) {
@@ -84,22 +104,7 @@ public:
             }
             else if (keyState == 'l') {
                 printf("Egyenes: ");
-                vec2 p1 = closestPoint(ndcX, ndcY);
-                line->Vtx().push_back(p1);
-
-                vec2 pl1 = line->Vtx()[line->Vtx().size()-1];
-                vec2 pl2 = line->Vtx()[line->Vtx().size()-2];
-                vec2 v = pl2-pl1; // irányvektor
-
-                if(line->Vtx().size() % 2 == 0){
-                    v = vec2(v.x * 10000, v.y * 10000);
-                    pl1 = pl1 + v;
-                    pl2 = pl2 - v ;
-                }
-
-                line->Vtx()[line->Vtx().size()-1] = pl1;
-                line->Vtx()[line->Vtx().size()-2] = pl2;
-                line->updateGPU();
+                drawLine(ndcX, ndcY);
             }
             else if (keyState == 'm') {
                 // Mozgatás
