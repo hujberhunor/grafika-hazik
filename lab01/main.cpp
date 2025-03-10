@@ -51,12 +51,8 @@ public:
         keyState = key;
     }
 
-    vec2 closestPoint(float pX, float pY) {
-        // NORMALIZÁLÁS
-        // float ndcX = 2.0f * (pX / (float) winWidth) - 1.0f;
-        // float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
-
-        // float minDist = std::numeric_limits<float>::max(); // Kezdetben végtelen nagy távolság
+    // Closest point to the cursor
+    vec2 closestPoint(float pX, float pY) { // MÁR NORMALIZÁLT KOORDINÁTÁKAT KAP!
         float minDist = 2.0; // mert 1.0 a max
         vec2 closestPoint;
 
@@ -72,6 +68,7 @@ public:
         return closestPoint;
     }
 
+    // Vonal kirajzolása 2 pontból
     void drawLine(float ndcX, float ndcY){
         vec2 p1 = closestPoint(ndcX, ndcY);
             line->Vtx().push_back(p1);
@@ -92,27 +89,71 @@ public:
             line->updateGPU();
     }
 
+    size_t closestLine(float pX, float pY) {
+            if (line->Vtx().size() < 2) return -1; // Ha nincs elég egyenes, nincs mit keresni
+
+            float minDist = 2.0f; // Maximális távolság (mivel az NDC [-1,1] között van)
+            size_t closestIndex = -1; // Az egyenes indexe a tömbben
+
+            for (size_t i = 0; i < line->Vtx().size() - 1; i += 2) {
+                vec2 p1 = line->Vtx()[i];
+                vec2 p2 = line->Vtx()[i + 1];
+
+                vec2 ab = p2 - p1;   // Az egyenes irányvektora
+                vec2 ac = vec2(pX, pY) - p1; // Az A pontból az egérhez mutató vektor
+
+                // Vetítési arány kiszámítása: t = (AC · AB) / (AB · AB)
+                float dotAC_AB = ac.x * ab.x + ac.y * ab.y;
+                float dotAB_AB = ab.x * ab.x + ab.y * ab.y;
+                float t = dotAC_AB / dotAB_AB;
+
+                // Clampeljük t-t, hogy az egyenes szakaszra essen [0,1] tartományban
+                if (t < 0.0f) t = 0.0f;
+                if (t > 1.0f) t = 1.0f;
+
+                // Kiszámítjuk a vetített pontot az egyenesen
+                vec2 projectedPoint;
+                projectedPoint.x = p1.x + t * (p2.x - p1.x);
+                projectedPoint.y = p1.y + t * (p2.y - p1.y);
+
+                // Távolság kiszámítása az egérkattintás és a legközelebbi pont között
+                float dist = sqrt((projectedPoint.x - pX) * (projectedPoint.x - pX) +
+                                  (projectedPoint.y - pY) * (projectedPoint.y - pY));
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestIndex = i;  // Az egyenes kezdőpontjának indexe
+                }
+            }
+            // std::cout << "legközelebbi egyenes idexe a listában:" << closestIndex;
+            return closestIndex; // Visszaadja a legközelebbi egyenes indexét
+        }
+
+
+
+
     void onMousePressed(MouseButton but, int pX, int pY) {
         if (but == MOUSE_LEFT) {
             float ndcX = 2.0f * (pX / (float) winWidth) - 1.0f;
             float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
 
-            if (keyState == 'p') {
+            if (keyState == 'p') { // pontlerakás
                 printf("Egérkattintás: (%.2f, %.2f) \n", ndcX, ndcY);
                 vertices->Vtx().push_back(vec2(ndcX, ndcY));
+                refreshScreen();
                 vertices->updateGPU();
             }
-            else if (keyState == 'l') {
+            else if (keyState == 'l') { // egyenes rajzolás
                 printf("Egyenes: ");
                 drawLine(ndcX, ndcY);
             }
-            else if (keyState == 'm') {
-                // Mozgatás
+            else if (keyState == 'm') {  // Mozgatás
+                // moveLine(ndcX, ndcY);
+
             }
             else if (keyState == 'i') {
                 // Metszéspont számítás
             }
-
             refreshScreen();
         }
     }
@@ -124,8 +165,8 @@ public:
         glPointSize(10.0f);
         glLineWidth(3.0f);
 
-        vertices -> Draw(gpuProgram, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
         line -> Draw(gpuProgram, GL_LINES, vec3(0.0f, 1.0f, 1.0f));
+        vertices -> Draw(gpuProgram, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
     }
 };
 
