@@ -1,5 +1,6 @@
 #include "./framework.h"
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <glm/detail/qualifier.hpp>
 #include <glm/ext/vector_float2.hpp>
@@ -129,8 +130,32 @@ public:
             return closestIndex; // Visszaadja a legközelebbi egyenes indexét
         }
 
+        void moveLine(float ndcX, float ndcY, int selectedLine) {
+            // Az egyenes két végpontja
+            vec2 p1 = line->Vtx()[selectedLine];
+            vec2 p2 = line->Vtx()[selectedLine + 1];
+
+            // Az eltolás kiszámítása az előző és az új egérpozíció alapján
+            static vec2 lastMousePos = vec2(ndcX, ndcY);
+            vec2 offset = vec2(ndcX, ndcY) - lastMousePos;
+
+            // Mindkét végpontot egyformán eltoljuk
+            line->Vtx()[selectedLine] += offset;
+            line->Vtx()[selectedLine + 1] += offset;
+
+            // Az új egérpozíciót eltároljuk a következő mozgásra
+            lastMousePos = vec2(ndcX, ndcY);
+
+            line->updateGPU();
+            refreshScreen();
+        }
+
+    void detecIntersect(){
 
 
+    }
+
+    size_t selectedLine = -1;
 
     void onMousePressed(MouseButton but, int pX, int pY) {
         if (but == MOUSE_LEFT) {
@@ -144,11 +169,12 @@ public:
                 vertices->updateGPU();
             }
             else if (keyState == 'l') { // egyenes rajzolás
-                printf("Egyenes: ");
+                // printf("Egyenes: ");
                 drawLine(ndcX, ndcY);
             }
             else if (keyState == 'm') {  // Mozgatás
                 // moveLine(ndcX, ndcY);
+                selectedLine = closestLine(ndcX, ndcY);
 
             }
             else if (keyState == 'i') {
@@ -156,6 +182,18 @@ public:
             }
             refreshScreen();
         }
+    }
+
+    void onMouseReleased(MouseButton but, int pX, int pY) override{
+        selectedLine = -1; // Egyenes elengdsése
+    }
+
+    void onMouseMotion(int pX, int pY) override{
+        float ndcX = 2.0f * (pX / (float) winWidth) - 1.0f;
+        float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
+
+        if(selectedLine == -1) return;
+        if(keyState == 'm')      moveLine(ndcX, ndcY, selectedLine);
     }
 
     void onDisplay(){
