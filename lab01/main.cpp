@@ -51,6 +51,7 @@ public:
 
     void onKeyboard(int key) override{
         keyState = key;
+        selectedLine1 = -1;
     }
 
     // Closest point to the cursor
@@ -86,13 +87,20 @@ public:
                 // pl2 = pl2 - v ;
                 line->Vtx()[line->Vtx().size()-1] = computeIntersection(pl1, pl2, vec2(-1, 1), vec2(1,1));
                 line->Vtx()[line->Vtx().size()-2] = computeIntersection(pl1, pl2, vec2(-1,-1), vec2(1,-1));
-            }
 
+                // képernyp szélével való metszések
+                if(line->Vtx()[line->Vtx().size()-1].x == 10.0f && line->Vtx()[line->Vtx().size()-1].y == 10.0f){
+                    line->Vtx()[line->Vtx().size()-1] = computeIntersection(pl1, pl2, vec2(1,-1), vec2(1,1));
+                    line->Vtx()[line->Vtx().size()-2] = computeIntersection(pl1, pl2, vec2(-1,-1), vec2(-1,1));
+                }
+            }
             // line->Vtx()[line->Vtx().size()-1] = pl1;
             // line->Vtx()[line->Vtx().size()-2] = pl2;
             line->updateGPU();
     }
 
+
+    // katthoz legközelebi indexet adja vissza
     int closestLine(float pX, float pY) {
             if (line->Vtx().size() < 2) return -1; // Ha nincs elég egyenes, nincs mit keresni
 
@@ -109,9 +117,13 @@ public:
                 vec2 p1 = line->Vtx()[i];
                 vec2 p2 = line->Vtx()[i + 1];
                 vec2 ab = p2 - p1;   // Az egyenes irányvektora
-                vec2 v(ab.y,-ab.x); // nomrálvektor
+                vec2 v(-ab.y, ab.x); // Normálvektor az egyenesre
 
-                vec2 seged = computeIntersection(p1 , p2, p1n, p1n + v); //
+                vec2 seged = computeIntersection(p1 , p1 + ab , p1n, p1n + v); //
+
+                vertices->Vtx().push_back(seged);
+                vertices->updateGPU();
+                refreshScreen();
 
                 float dist = sqrt(pow(p1n.x - seged.x, 2) + pow(p1n.y - seged.y, 2));
 
@@ -150,8 +162,8 @@ public:
             vec2 nA = A2-A1;
             vec2 nB = B2-B1;
 
-            nA = vec2(nA.y, -nA.x); // normél
-            nB = vec2(nB.y, -nB.x); // normél
+            nA = vec2(nA.y, -1.0f * nA.x); // normél
+            nB = vec2(nB.y, -1.0f * nB.x); // normél
 
             float det = nA.x * nB.y - nA.y * nB.x;
 
@@ -165,52 +177,48 @@ public:
             float x = (nB.y * Ac - nA.y * Bc) / det;
             float y = (nA.x * Bc - nB.x * Ac) / det;
 
-            vec2 ret(x,y);
-            vertices->Vtx().push_back(ret);
-            vertices->updateGPU();
             return vec2(x, y);
         }
 
 
-        void detectIntersect(size_t line1, size_t line2) {
-            if (line->Vtx().size() < 4) return;
+        // // VANe intersect 2 linek között
+        // void detectIntersect(size_t line1, size_t line2) {
+        //     vec2 A1 = line->Vtx()[line1];
+        //     vec2 A2 = line->Vtx()[line1 + 1];
+        //     vec2 B1 = line->Vtx()[line2];
+        //     vec2 B2 = line->Vtx()[line2 + 1];
 
-            vec2 A1 = line->Vtx()[line1];
-            vec2 A2 = line->Vtx()[line1 + 1];
-            vec2 B1 = line->Vtx()[line2];
-            vec2 B2 = line->Vtx()[line2 + 1];
+        //         vec2 intersection = computeIntersection(A1, A2, B1, B2);
 
-            vec2 intersection = computeIntersection(A1, A2, B1, B2);
+        //         vertices->Vtx().push_back(intersection);
+        //         vertices->updateGPU();
+        //         refreshScreen();
+        // }
 
-            // Ha az egyenesek nem párhuzamosak, akkor lerakjuk a metszéspontot
-            if (intersection.x != 0 || intersection.y != 0) {
-                vertices->Vtx().push_back(intersection);
-                vertices->updateGPU();
-                refreshScreen();
-
-                std::cout << "Metszéspont: (" << intersection.x << ", " << intersection.y << ")" << std::endl;
-            }
-        }
-
-
+        // egymás után 2 linek kiválasztása
         void pickedLines(int pX, int pY) {
-            float ndcX = 2.0f * (pX / (float) winWidth) - 1.0f;
-            float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
+            float ndcX = pX;
+            float ndcY = pY;
             int closestLineLocal = -1;
 
             if( selectedLine1 != -1 ){
                 closestLineLocal = closestLine(ndcX, ndcY);
-                detectIntersect(selectedLine1, closestLineLocal);
+                // detectIntersect(selectedLine1, closestLineLocal);
+
+                vec2 asd = computeIntersection(vertices->Vtx()[selectedLine1], vertices->Vtx()[selectedLine1+1],
+                    vertices->Vtx()[closestLineLocal],  vertices->Vtx()[closestLineLocal+1]);
+
+                printf(" %d ; %d; \n %f ; %f \n", closestLineLocal, selectedLine1, asd.x, asd.y);
+               vertices->Vtx().push_back(asd);
+               vertices->updateGPU();
+               refreshScreen();
                 selectedLine1 = -1;
             }
             else {
                 selectedLine1 = closestLine(ndcX, ndcY);
+                printf("GECI elsebn vagy");
             }
-
-            std::cout << selectedLine1;
         }
-
-        // Az egyenesek kiválasztásának frissítése
 
         void onMousePressed(MouseButton but, int pX, int pY) {
             if (but == MOUSE_LEFT) {
@@ -221,25 +229,22 @@ public:
                     vertices->Vtx().push_back(vec2(ndcX, ndcY));
                     vertices->updateGPU();
                     refreshScreen();
+
                 }
                 else if (keyState == 'l') { // egyenes rajzolás
                     drawLine(ndcX, ndcY);
+
                 }
                 else if (keyState == 'i') { // Metszéspont keresés
                     // MEGÖLÖM MAGAM!!
-                    // pickedLines(ndcX, ndcY);
-                    printf("%d \n", closestLine(ndcX, ndcY));
+                    pickedLines(ndcX, ndcY);
                }
                 refreshScreen();
             }
         }
 
-
-
-
-
     void onMouseReleased(MouseButton but, int pX, int pY) override{
-        selectedLine1 = -1; // Egyenes elengdsése
+        // selectedLine1 = -1; // Egyenes elengdsése
     }
 
     void onMouseMotion(int pX, int pY) override{
