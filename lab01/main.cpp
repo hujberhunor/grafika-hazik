@@ -167,8 +167,8 @@ public:
 
             // Ha az egyenes nem metszi a felső vagy alsó élt, akkor az oldalakkal metszük
             if (line->Vtx()[selectedLine].x == 10.0f && line->Vtx()[selectedLine].y == 10.0f) {
-                line->Vtx()[selectedLine] = computeIntersection(pl1, pl2, vec2(1, -1), vec2(1, 1));
-                line->Vtx()[selectedLine + 1] = computeIntersection(pl1, pl2, vec2(-1, -1), vec2(-1, 1));
+                line->Vtx()[selectedLine] = computeIntersection(mousePos, mousePos + v, vec2(1, -1), vec2(1, 1));
+                line->Vtx()[selectedLine + 1] = computeIntersection(mousePos, mousePos + v, vec2(-1, -1), vec2(-1, 1));
             }
 
             // Az új egérpozíciót elmentjük
@@ -223,7 +223,7 @@ public:
                 // Ha a két kiválasztott egyenes azonos, akkor nem csinálunk semmit
                 if (selectedLine1 == selectedLine2) {
                     printf("Ugyanazt az egyenest választottad!\n");
-                    // selectedLine1 = -1;
+                    selectedLine1 = -1;
                     return;
                 }
 
@@ -233,8 +233,11 @@ public:
                 vec2 B1 = line->Vtx()[selectedLine2];
                 vec2 B2 = line->Vtx()[selectedLine2 + 1];
 
+
                 // Metszéspont számítása
                 vec2 intersection = computeIntersection(A1, A2, B1, B2);
+                vertices->Vtx().push_back(intersection);
+                vertices->updateGPU();
 
                 // Kiválasztás visszaállítása
                 selectedLine1 = -1;
@@ -252,11 +255,15 @@ public:
 
                 if (keyState == 'p') { // pontlerakás
                     vertices->Vtx().push_back(vec2(ndcX, ndcY));
+
+                    printf("Lerakott pontok: %f %f \n", ndcX, ndcY);
+
                     vertices->updateGPU();
                     refreshScreen();
 
                 }
                 else if (keyState == 'l') { // egyenes rajzolás
+                    printf("Megkapott pontok: %f %f \n", ndcX, ndcY);
                     drawLine(ndcX, ndcY);
 
                 }
@@ -285,6 +292,7 @@ public:
 
             if (keyState == 'm' && selectedLine1 != -1) {
                 moveLine(pX, pY, selectedLine1);
+                printf("Egér: %f %f\n", ndcX, ndcY);
             }
         }
 
