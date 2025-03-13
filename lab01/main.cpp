@@ -79,8 +79,6 @@ public:
             // if(line->Vtx()[line->Vtx().size()-1].x == p1.x && line->Vtx()[line->Vtx().size()-1].y == p1.y) return;
             line->Vtx().push_back(p1);
 
-
-
             // irányvektorral való nyújtás
             if(line->Vtx().size() % 2 == 0){
                 // v = vec2(v.x * 10000, v.y * 10000);
@@ -150,31 +148,34 @@ public:
         }
 
         // Nem működött a cuvv
-        void moveLine(float ndcX, float ndcY, int selectedLine) {
+
+        void moveLine(float pX, float pY, int selectedLine) {
+            float ndcX = 2.0f * (pX / (float) winWidth) - 1.0f;
+            float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
+
+            if (selectedLine == -1) return;
+
+            printf("%d", selectedLine);
+
             // Az egyenes két végpontja
             vec2 p1 = line->Vtx()[selectedLine];
             vec2 p2 = line->Vtx()[selectedLine + 1];
 
-            vec2 v = p2 - p1;
-            line->Vtx()[selectedLine1+1] = computeIntersection(vec2(ndcX, ndcY), vec2(ndcX, ndcY) + v, vec2(-1,1), vec2(1,1) + v);
-            line->Vtx()[selectedLine1] = computeIntersection(vec2(ndcX, ndcY), vec2(ndcX, ndcY) + v, vec2(-1,-1), vec2(1,-1) + v);
+            // Az eltolás kiszámítása
+            static vec2 lastMousePos = vec2(ndcX, ndcY);
+            vec2 offset = vec2(ndcX, ndcY) - lastMousePos;
 
+            // Mindkét végpontot ugyanazzal az offsettel mozdítjuk el
+            line->Vtx()[selectedLine] = p1 + offset;
+            line->Vtx()[selectedLine + 1] = p2 + offset;
 
-            // Az eltolás kiszámítása az előző és az új egérpozíció alapján
-            // static vec2 lastMousePos = vec2(ndcX, ndcY);
-            // vec2 offset = vec2(ndcX, ndcY) - lastMousePos;
+            // Az új egérpozíciót elmentjük
+            lastMousePos = vec2(ndcX, ndcY);
 
-            // Mindkét végpontot egyformán eltoljuk
-            // line->Vtx()[selectedLine] += offset;
-            // line->Vtx()[selectedLine + 1] += offset;
-
-            // // Az új egérpozíciót eltároljuk a következő mozgásra
-            // lastMousePos = vec2(ndcX, ndcY);
-
+            // GPU frissítés és újrarajzolás
             line->updateGPU();
             refreshScreen();
         }
-
 
         // 2 egyenes metszése
         vec2 computeIntersection(vec2 A1, vec2 A2, vec2 B1, vec2 B2) {
@@ -199,10 +200,7 @@ public:
             return intersection;
         }
 
-
-
         // egymás után 2 linek kiválasztása
-
         void pickedLines(int pX, int pY) {
             // Normalizált koordináták számítása
             float ndcX = 2.0f * (pX / (float) winWidth) - 1.0f;
@@ -269,7 +267,9 @@ public:
 
                 }
                 else if (keyState == 'm') {
-                    moveLine(ndcX, ndcY, selectedLine1);
+                    // printf("Az move lenyomva\n");
+                    selectedLine1 = closestLine(ndcX, ndcY);
+                    // moveLine(pX, pY, selectedLine1);
                 }
                 else if (keyState == 'i') { // Metszéspont keresés
                     // MEGÖLÖM MAGAM!!
@@ -292,7 +292,9 @@ public:
         float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
 
         if(selectedLine1 == -1) return;
-        // if(keyState == 'm')      moveLine(ndcX, ndcY, selectedLine1);
+        if(keyState == 'm'){
+            moveLine(pX, pY, selectedLine1);
+        }
     }
 
     void onDisplay(){
