@@ -1,25 +1,27 @@
 #include "include/framework.h"
+#include <GLFW/glfw3.h>
 #include <glm/matrix.hpp>
+#include <iostream>
 
-// csúcspont árnyaló
+// cs�cspont �rnyal�
 const char *vertSource = R"(
 	#version 330
     precision highp float;
 
 	layout(location = 0) in vec2 cP;	// 0. bemeneti regiszter
-	uniform mat4 MVP;
+
 	void main() {
-		gl_Position = MVP * vec4(cP.x, cP.y, 0, 1); 	// bemenet már normalizált eszközkoordinátákban
+		gl_Position = vec4(cP.x, cP.y, 0, 1); 	// bemenet m�r normaliz�lt eszk�zkoordin�t�kban
 	}
 )";
 
-// pixel árnyaló
+// pixel �rnyal�
 const char *fragSource = R"(
 	#version 330
     precision highp float;
 
-	uniform vec3 color;			// konstans szín
-	out vec4 fragmentColor;		// pixel szín
+	uniform vec3 color;			// konstans sz�n
+	out vec4 fragmentColor;		// pixel sz�n
 
 	void main() {
 		fragmentColor = vec4(color, 1); // RGB -> RGBA
@@ -89,6 +91,8 @@ class Spline {
         float ti = cp.size();
         cp.push_back(p);
         t.push_back(ti);
+
+        cps.updateGPU();
     }
 
     // Lokálja meglyik szakaszra esik a t paraméter
@@ -105,22 +109,10 @@ class Spline {
         return vec3(0, 0, 0); // fallback, ha nem találunk megfelelő intervallumot
     }
 
-    float t_min(){ return t[0];}
-    float t_max(){ return t[t.size()-1];}
-
-    void drawSpline(GPUProgram* gpu, vec3 color) {
-        std::vector<vec3> points;
-        for (float t = t_min(); t <= t_max(); t += 0.01f)
-            points.push_back(r(t));
-
-        Geometry<vec3> geom;
-        geom.Vtx() = points;
-        geom.updateGPU();
-        geom.Draw(gpu, GL_POINTS, color);
+    void drawSpline(GPUProgram* gpu, int type, vec3 color) {
+        cps.updateGPU();
+        cps.Draw(gpu, type , color);
     }
-
-    Geometry<vec3> getCps(){ return cps; }
-
 
 }; // END OF SPLINE
 
@@ -137,22 +129,30 @@ public:
 
   void onInitialization() {
     spline = new Spline();
-
-    spline->AddControlPoint(vec3(0.4f, 0.4f, 0));
-    spline->AddControlPoint(vec3(0.8f, -0.6f, 0));
-
     gpuProgram = new GPUProgram(vertSource, fragSource);
   }
 
-  void onDisplay() {
-    glClearColor(0.5f, 0.5, 0.5, 0);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glViewport(0,0, winWidth, winHeight);
-    glPointSize(10.0f);
-    glLineWidth(3.0f);
+  // Pontok hozzáadása
+  void onMousePressed(MouseButton but, int pX, int pY) override{
+      if (but == MOUSE_LEFT) {
+        float ndcX = 2.0f * (pX / (float) winWidth) - 1.0f;
+        float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
 
-    spline->drawSpline(gpuProgram, vec3(1.0f, 0.0f, 0.0f));
+        spline->AddControlPoint(vec3(ndcX, ndcY, 0));
+        refreshScreen();
+      }
   }
+
+
+  void onDisplay() {
+      glClearColor(0.5f, 0.5f, 0.5f, 1);
+      glClear(GL_COLOR_BUFFER_BIT);
+      glViewport(0,0, winWidth, winHeight);
+      glPointSize(10.0f); // FONTOS!
+
+      spline->drawSpline(gpuProgram, GL_POINTS, vec3(1, 0, 0));
+  }
+
 };
 
 
