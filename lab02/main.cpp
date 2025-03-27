@@ -109,6 +109,10 @@ class Spline {
         return vec3(0, 0, 0);
     }
 
+    void drawControllPoints(GPUProgram* gpu) {
+        cps.updateGPU();
+        cps.Draw(gpu, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));   // piros pontok
+    }
 
     void drawSpline(GPUProgram* gpu) {
         std::vector<vec3> points;
@@ -123,10 +127,7 @@ class Spline {
         Geometry<vec3> curve;
         curve.Vtx() = points;
         curve.updateGPU();
-        curve.Draw(gpu, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f)); // sárga pontok
-
-        cps.updateGPU();
-        cps.Draw(gpu, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));   // piros vonal
+        curve.Draw(gpu, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f)); // sárga görbe
     }
 }; // END OF SPLINE
 
@@ -166,6 +167,7 @@ public:
 
       // Controll pontok és görbék kirajzolása
       spline->drawSpline(gpuProgram);
+      spline->drawControllPoints(gpuProgram);
   }
 };
 
