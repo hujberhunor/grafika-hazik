@@ -106,11 +106,11 @@ class Spline {
             }
         }
         // TOOD KEZELNI
-        return vec3(0, 0, 0); // fallback, ha nem találunk megfelelő intervallumot
+        return vec3(0, 0, 0);
     }
 
 
-    void drawSpline(GPUProgram* gpu, vec3 color) {
+    void drawSpline(GPUProgram* gpu) {
         std::vector<vec3> points;
         if (cp.size() < 2) return;
 
@@ -123,13 +123,11 @@ class Spline {
         Geometry<vec3> curve;
         curve.Vtx() = points;
         curve.updateGPU();
-        curve.Draw(gpu, GL_LINE_STRIP, color);
+        curve.Draw(gpu, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f)); // sárga pontok
 
-        cps.updateGPU(); // ha nem biztos, hogy friss
-        cps.Draw(gpu, GL_POINTS, vec3(1.0f, 0.0f, 0.0f)); // piro
+        cps.updateGPU();
+        cps.Draw(gpu, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));   // piros vonal
     }
-
-
 }; // END OF SPLINE
 
 
@@ -163,12 +161,12 @@ public:
       glClearColor(0.5f, 0.5f, 0.5f, 1);
       glClear(GL_COLOR_BUFFER_BIT);
       glViewport(0,0, winWidth, winHeight);
-      glPointSize(10.0f); // FONTOS!
+      glPointSize(10.0f);
+      glLineWidth(3.0f);
 
-      spline->drawSpline(gpuProgram, vec3(1, 0, 0));
+      // Controll pontok és görbék kirajzolása
+      spline->drawSpline(gpuProgram);
   }
-
 };
-
 
 Main app;
