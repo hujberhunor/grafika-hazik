@@ -158,7 +158,7 @@ public:
   }
 
   void onDisplay() {
-      glClearColor(0.5f, 0.5f, 0.5f, 1);
+      glClearColor(0.0f, 0.0f, 0.0f, 1);
       glClear(GL_COLOR_BUFFER_BIT);
       glViewport(0,0, winWidth, winHeight);
       glPointSize(10.0f);
