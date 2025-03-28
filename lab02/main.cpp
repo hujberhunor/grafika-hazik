@@ -199,58 +199,69 @@ public:
       param = 0.01f;
       vec3 p = spline->r(param);
       pos = vec2(p.x, p.y);
-      velocity = 1.0f;
+      velocity = 0.0f;
       state = ROLLING;
     }
   }
+
+  // void Animate(float dt) {
+  //   if (state != ROLLING || spline == nullptr)
+  //     return;
+
+  //   // spline pont és érintő
+  //   vec3 p3 = spline->r(param);
+  //   vec3 d3 = spline->dr(param);
+
+  //   vec2 r = vec2(p3.x, p3.y);
+  //   vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
+  //   vec2 normal = vec2(-dr.y, dr.x);       // normális
+
+  //   const vec2 gravity = vec2(0, -40); // gravitáció
+
+  //   // gyorsulás vetítése az érintőre
+  //   float acc = dot(gravity, dr) / (1.0f + lambda);
+
+  //   // sebességfrissítés
+  //   velocity += acc * dt;
+
+  //   // spline paraméter növelése
+
+  //   float tangentLength =
+  //       std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
+  //   float speedAlongSpline = velocity / tangentLength;
+  //   param += speedAlongSpline * dt;
+
+  //   // új pozíció
+  //   vec3 newPos3 = spline->r(param);
+  //   pos = vec2(newPos3.x, newPos3.y);
+
+  //   // nyomóerő ellenőrzése
+  //   float nyomoEro =
+  //       dot(gravity, normal) + lambda * velocity * velocity / radius;
+  //   if (nyomoEro < 0) {
+  //     state = FALLEN;
+  //   }
+
+  //   std::cout << "param: " << param << ", velocity: " << velocity << std::endl;
+  //   std::cout << "tangent length: " << length(vec2(d3.x, d3.y)) << std::endl;
+
+  //   // visszafordulás
+  //   if (velocity < 0) {
+  //     state = WAITING;
+  //   }
+  // }
 
   void Animate(float dt) {
     if (state != ROLLING || spline == nullptr)
       return;
 
-    // spline pont és érintő
-    vec3 p3 = spline->r(param);
-    vec3 d3 = spline->dr(param);
+    param += 0.5f * dt;  // FIX TEMPÓ
 
-    vec2 r = vec2(p3.x, p3.y);
-    vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
-    vec2 normal = vec2(-dr.y, dr.x);       // normális
+    vec3 p = spline->r(param);
+    pos = vec2(p.x, p.y);
 
-    const vec2 gravity = vec2(0, -40); // gravitáció
-
-    // gyorsulás vetítése az érintőre
-    float acc = dot(gravity, dr) / (1.0f + lambda);
-
-    // sebességfrissítés
-    velocity += acc * dt;
-
-    // spline paraméter növelése
-
-    float tangentLength =
-        std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
-    float speedAlongSpline = velocity / tangentLength;
-    param += speedAlongSpline * dt;
-
-    // új pozíció
-    vec3 newPos3 = spline->r(param);
-    pos = vec2(newPos3.x, newPos3.y);
-
-    // nyomóerő ellenőrzése
-    float nyomoEro =
-        dot(gravity, normal) + lambda * velocity * velocity / radius;
-    if (nyomoEro < 0) {
-      state = FALLEN;
-    }
-
-    std::cout << "param: " << param << ", velocity: " << velocity << std::endl;
-    std::cout << "tangent length: " << length(vec2(d3.x, d3.y)) << std::endl;
-
-    // visszafordulás
-    if (velocity < 0) {
-      state = WAITING;
-    }
+    std::cout << "Moving! param = " << param << ", pos = " << pos.x << ", " << pos.y << std::endl;
   }
-
   vec2 getPosition() const { return pos; }
 
   GondolaState getState() const { return state; }
@@ -317,10 +328,10 @@ public:
 
   void onTimeElapsed(float startTime, float endTime) {
     float dt = endTime - startTime;
-    if (gondola)
+    if (gondola){
       gondola->Animate(dt);
-    std::cout << "FAZS";
-    refreshScreen(); // hogy újrarajzolja
+      refreshScreen(); // hogy újrarajzolja
+    }
   }
 
   void onDisplay() {
