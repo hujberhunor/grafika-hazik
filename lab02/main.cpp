@@ -3,16 +3,17 @@
 #include <glm/matrix.hpp>
 #include <iostream>
 
-// cs�cspont �rnyal�
 const char *vertSource = R"(
-	#version 330
+    #version 330
     precision highp float;
 
-	layout(location = 0) in vec2 cP;	// 0. bemeneti regiszter
+    layout(location = 0) in vec2 cP;
 
-	void main() {
-		gl_Position = vec4(cP.x, cP.y, 0, 1); 	// bemenet m�r normaliz�lt eszk�zkoordin�t�kban
-	}
+    uniform mat4 MVP;  // <-- EZ ITT A KULCS
+
+    void main() {
+        gl_Position = MVP * vec4(cP, 0.0, 1.0); // <-- transzformáljuk
+    }
 )";
 
 // pixel �rnyal�
@@ -141,13 +142,16 @@ public:
     return vec3(0, 0, 0);
   }
 
-  void drawSpline(GPUProgram *gpu) {
+  void drawSpline(GPUProgram *gpu, const mat4 &viewMatrix) {
     std::vector<vec3> points;
     if (cp.size() < 2)
       return;
 
-    // Görbe pontjainak kiszámítása
-    float dt = 0.01f; // lépésköz
+    mat4 MVP = viewMatrix;
+    gpu->setUniform(MVP, "MVP"); // <-- hozzáad
+
+    // spline kirajzolása
+    float dt = 0.01f;
     for (float param = t[0]; param <= t[t.size() - 1]; param += dt) {
       points.push_back(r(param));
     }
@@ -155,18 +159,123 @@ public:
     Geometry<vec3> curve;
     curve.Vtx() = points;
     curve.updateGPU();
-    curve.Draw(gpu, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f)); // sárga pontok
+    curve.Draw(gpu, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f));
 
     cps.updateGPU();
-    cps.Draw(gpu, GL_POINTS, vec3(1.0f, 0.0f, 0.0f)); // piros vonal
+    cps.Draw(gpu, GL_POINTS, vec3(1.0f, 0.0f, 0.0f)); // piros pontok
   }
+
 }; // END OF SPLINE
 
-// Kocsi class
-class Gondola;
+enum GondolaState { WAITING, ROLLING, FALLEN };
+
+class Gondola {
+private:
+  Spline *spline;
+  GondolaState state;
+
+  float param;    // spline menti pozíció
+  vec2 pos;       // világkoordinátás pozíció
+  float velocity; // sebesség (skalár)
+  float radius;   // kerék sugara
+  float lambda;   // tehetetlenségi tényező
+  float mass;     // tömeg
+
+public:
+  Gondola(Spline *spline) : spline(spline) {
+    state = WAITING;
+    param = 0.01f;
+    pos = vec2(0, 0);
+    velocity = 0.0f;
+    radius = 0.5f;
+    lambda = 1.0f;
+    mass = 1.0f;
+  }
+
+  void Start() {
+    if (state == WAITING && spline) {
+      param = 0.01f;
+      vec3 p = spline->r(param);
+      pos = vec2(p.x, p.y);
+      velocity = 0.0f;
+      state = ROLLING;
+    }
+  }
+
+  void Animate(float dt) {
+    if (state != ROLLING || spline == nullptr)
+      return;
+
+    // spline pont és érintő
+    vec3 p3 = spline->r(param);
+    vec3 d3 = spline->dr(param);
+
+    vec2 r = vec2(p3.x, p3.y);
+    vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
+    vec2 normal = vec2(-dr.y, dr.x);       // normális
+
+    const vec2 gravity = vec2(0, -40); // gravitáció
+
+    // gyorsulás vetítése az érintőre
+    float acc = dot(gravity, dr) / (1.0f + lambda);
+
+    // sebességfrissítés
+    velocity += acc * dt;
+
+    // spline paraméter növelése
+    float speedAlongSpline = velocity / length(vec2(d3.x, d3.y));
+    param += speedAlongSpline * dt;
+
+    // új pozíció
+    vec3 newPos3 = spline->r(param);
+    pos = vec2(newPos3.x, newPos3.y);
+
+    // nyomóerő ellenőrzése
+    float nyomoEro =
+        dot(gravity, normal) + lambda * velocity * velocity / radius;
+    if (nyomoEro < 0) {
+      state = FALLEN;
+    }
+
+    // visszafordulás
+    if (velocity < 0) {
+      state = WAITING;
+    }
+  }
+
+  vec2 getPosition() const { return pos; }
+
+  GondolaState getState() const { return state; }
+
+  void Draw(GPUProgram *gpu, const mat4 &viewMatrix) {
+    if (state == WAITING)
+      return;
+
+    // kör kirajzolása
+    Geometry<vec2> circle;
+    std::vector<vec2> vtx;
+    const int n = 32;
+    vtx.push_back(vec2(0, 0));
+    for (int i = 0; i <= n; ++i) {
+      float angle = i * 2 * M_PI / n;
+      vtx.push_back(vec2(radius * cos(angle), radius * sin(angle)));
+    }
+    circle.Vtx() = vtx;
+    circle.updateGPU();
+
+    // MVP mátrix
+    mat4 model = translate(vec3(pos.x, pos.y, 0));
+    mat4 MVP = viewMatrix * model;
+
+    gpu->setUniform(MVP, "MVP");
+    circle.Draw(gpu, GL_TRIANGLE_FAN, vec3(0, 0, 1));
+  }
+};
 
 class Main : public glApp {
   Spline *spline;
+  Gondola *gondola;
+  Camera2D camera;
   GPUProgram *gpuProgram;
 
 public:
@@ -174,18 +283,31 @@ public:
 
   void onInitialization() {
     spline = new Spline();
+    gondola = new Gondola(spline);
+    // camera = new Camera2D();
     gpuProgram = new GPUProgram(vertSource, fragSource);
   }
 
   // Pontok hozzáadása
   void onMousePressed(MouseButton but, int pX, int pY) override {
     if (but == MOUSE_LEFT) {
-      float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
-      float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
-
-      spline->AddControlPoint(vec3(ndcX, ndcY, 0));
+      vec3 world = camera.screenToWorld(vec2(pX, pY));
+      spline->AddControlPoint(vec3(world.x, world.y, 0));
       refreshScreen();
     }
+  }
+
+  void onKeyboard(int key) {
+    if (key == 'g') {
+      if (gondola)
+        gondola->Start();
+    }
+  }
+
+  void onTimeElapsed(float dt) {
+    if (gondola)
+      gondola->Animate(dt);
+    refreshScreen(); // hogy újrarajzolja
   }
 
   void onDisplay() {
@@ -195,8 +317,11 @@ public:
     glPointSize(10.0f);
     glLineWidth(3.0f);
 
-    // Controll pontok és görbék kirajzolása
-    spline->drawSpline(gpuProgram);
+    mat4 viewMatrix = camera.MVP();
+
+    spline->drawSpline(gpuProgram, viewMatrix);
+    if (gondola)
+      gondola->Draw(gpuProgram, viewMatrix); // <-- ez rajzolja ki a mozgó kört!
   }
 };
 
