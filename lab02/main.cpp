@@ -102,20 +102,32 @@ public:
   }
 
   // Lokálja meglyik szakaszra esik a t paraméter
-  vec3 r(float param) {
-    for (int i = 0; i < cp.size() - 1; i++) {
-      if (t[i] <= param && param <= t[i + 1]) {
-        vec3 v0(0, 0, 0), v1(0, 0, 0);
-        if (i > 0)
-          v0 = (cp[i] - cp[i - 1]) / (t[i] - t[i - 1]);
-        if (i < cp.size() - 2)
-          v1 = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
-        return Hermite(cp[i], v0, t[i], cp[i + 1], v1, t[i + 1], param);
+  vec3 r(float tParam) {
+      for (int i = 0; i < cp.size() - 1; i++) {
+          if (t[i] <= tParam && tParam <= t[i + 1]) {
+              vec3 v0(0, 0, 0), v1(0, 0, 0);
+
+              // v0: sebesség az i. pontban
+              if (i > 0 && i < cp.size() - 1) {
+                  vec3 right = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
+                  vec3 left  = (cp[i] - cp[i - 1]) / (t[i] - t[i - 1]);
+                  v0 = 0.5f * (right + left);
+              }
+
+              // v1: sebesség az (i+1). pontban
+              if (i < cp.size() - 2) {
+                  vec3 right = (cp[i + 2] - cp[i + 1]) / (t[i + 2] - t[i + 1]);
+                  vec3 left  = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
+                  v1 = 0.5f * (right + left);
+              }
+
+              return Hermite(cp[i], v0, t[i], cp[i + 1], v1, t[i + 1], tParam);
+          }
       }
-    }
-    // TOOD KEZELNI
-    return vec3(0, 0, 0);
+      return vec3(0, 0, 0); // Ha nem található intervallum
   }
+
+
 
   vec3 HermiteDeriv(vec3 p0, vec3 v0, float t0, vec3 p1, vec3 v1, float t1,
                     float t) {
