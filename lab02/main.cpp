@@ -1,5 +1,6 @@
 #include "include/framework.h"
 #include <GLFW/glfw3.h>
+#include <cmath>
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 #include <iostream>
@@ -198,7 +199,7 @@ public:
       param = 0.01f;
       vec3 p = spline->r(param);
       pos = vec2(p.x, p.y);
-      velocity = 0.0f;
+      velocity = 1.0f;
       state = ROLLING;
     }
   }
@@ -224,7 +225,10 @@ public:
     velocity += acc * dt;
 
     // spline paraméter növelése
-    float speedAlongSpline = velocity / length(vec2(d3.x, d3.y));
+
+    float tangentLength =
+        std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
+    float speedAlongSpline = velocity / tangentLength;
     param += speedAlongSpline * dt;
 
     // új pozíció
@@ -237,6 +241,9 @@ public:
     if (nyomoEro < 0) {
       state = FALLEN;
     }
+
+    std::cout << "param: " << param << ", velocity: " << velocity << std::endl;
+    std::cout << "tangent length: " << length(vec2(d3.x, d3.y)) << std::endl;
 
     // visszafordulás
     if (velocity < 0) {
@@ -251,6 +258,8 @@ public:
   void Draw(GPUProgram *gpu, const mat4 &viewMatrix) {
     if (state == WAITING)
       return;
+
+    std::cout << "DRAW gondola at pos: " << pos.x << ", " << pos.y << std::endl;
 
     // kör kirajzolása
     Geometry<vec2> circle;
@@ -302,13 +311,15 @@ public:
     if (key == 'g') {
       if (gondola)
         gondola->Start();
-        refreshScreen();
+      refreshScreen();
     }
   }
 
-  void onTimeElapsed(float dt) {
+  void onTimeElapsed(float startTime, float endTime) {
+    float dt = endTime - startTime;
     if (gondola)
       gondola->Animate(dt);
+    std::cout << "FAZS";
     refreshScreen(); // hogy újrarajzolja
   }
 
