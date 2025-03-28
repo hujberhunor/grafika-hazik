@@ -204,64 +204,73 @@ public:
     }
   }
 
-  // void Animate(float dt) {
-  //   if (state != ROLLING || spline == nullptr)
-  //     return;
-
-  //   // spline pont és érintő
-  //   vec3 p3 = spline->r(param);
-  //   vec3 d3 = spline->dr(param);
-
-  //   vec2 r = vec2(p3.x, p3.y);
-  //   vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
-  //   vec2 normal = vec2(-dr.y, dr.x);       // normális
-
-  //   const vec2 gravity = vec2(0, -40); // gravitáció
-
-  //   // gyorsulás vetítése az érintőre
-  //   float acc = dot(gravity, dr) / (1.0f + lambda);
-
-  //   // sebességfrissítés
-  //   velocity += acc * dt;
-
-  //   // spline paraméter növelése
-
-  //   float tangentLength =
-  //       std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
-  //   float speedAlongSpline = velocity / tangentLength;
-  //   param += speedAlongSpline * dt;
-
-  //   // új pozíció
-  //   vec3 newPos3 = spline->r(param);
-  //   pos = vec2(newPos3.x, newPos3.y);
-
-  //   // nyomóerő ellenőrzése
-  //   float nyomoEro =
-  //       dot(gravity, normal) + lambda * velocity * velocity / radius;
-  //   if (nyomoEro < 0) {
-  //     state = FALLEN;
-  //   }
-
-  //   std::cout << "param: " << param << ", velocity: " << velocity << std::endl;
-  //   std::cout << "tangent length: " << length(vec2(d3.x, d3.y)) << std::endl;
-
-  //   // visszafordulás
-  //   if (velocity < 0) {
-  //     state = WAITING;
-  //   }
-  // }
 
   void Animate(float dt) {
     if (state != ROLLING || spline == nullptr)
       return;
 
-    param += 0.5f * dt;  // FIX TEMPÓ
+    // spline pont és érintő
+    vec3 p3 = spline->r(param);
+    vec3 d3 = spline->dr(param);
+    vec2 r = vec2(p3.x, p3.y);
+    vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
+    vec2 normal = vec2(-dr.y, dr.x);       // normális
 
-    vec3 p = spline->r(param);
-    pos = vec2(p.x, p.y);
+    // biztosítsuk, hogy a normális lefelé mutasson (dot < 0)
+    if (dot(normal, vec2(0, -1)) < 0)
+        normal = -normal;
 
-    std::cout << "Moving! param = " << param << ", pos = " << pos.x << ", " << pos.y << std::endl;
+    const vec2 gravity = vec2(0, -40); // gravitáció
+
+    // gyorsulás vetítése az érintőre
+    float acc = dot(gravity, dr) / (1.0f + lambda);
+    velocity += acc * dt;
+
+    // spline paraméter növelése
+    float tangentLength = std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
+    float speedAlongSpline = velocity / tangentLength;
+    param += speedAlongSpline * dt;
+
+    vec3 newPos3 = spline->r(param);
+    pos = vec2(newPos3.x, newPos3.y);
+
+    // nyomóerő
+    float nyomoEro = dot(gravity, normal) + lambda * velocity * velocity / radius;
+
+    // DEBUG:
+    std::cout << "======== DEBUG ANIMATE ========\n";
+    std::cout << "dt: " << dt << "\n";
+    std::cout << "param: " << param << "\n";
+    std::cout << "pos: (" << pos.x << ", " << pos.y << ")\n";
+    std::cout << "velocity: " << velocity << "\n";
+    std::cout << "acc: " << acc << "\n";
+    std::cout << "tangentLength: " << tangentLength << "\n";
+    std::cout << "speedAlongSpline: " << speedAlongSpline << "\n";
+    std::cout << "nyomoEro: " << nyomoEro << "\n";
+    std::cout << "===============================\n";
+
+    if (nyomoEro < 0) {
+      std::cout << "FALLEN! nyomoEro < 0\n";
+      state = FALLEN;
+    }
+
+    if (velocity < 0) {
+      std::cout << "STOPPED! velocity < 0\n";
+      state = WAITING;
+    }
   }
+
+
+  //  FIX ÉRTÉKEKKEL MEGy
+  // void Animate(float dt) {
+  //   if (state != ROLLING || spline == nullptr)
+  //     return;
+  //   param += 0.5f * dt;  // FIX TEMPÓ
+  //   vec3 p = spline->r(param);
+  //   pos = vec2(p.x, p.y);
+  //   std::cout << "Moving! param = " << param << ", pos = " << pos.x << ", " << pos.y << std::endl;
+  // }
+
   vec2 getPosition() const { return pos; }
 
   GondolaState getState() const { return state; }
