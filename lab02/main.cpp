@@ -1,5 +1,6 @@
 #include "include/framework.h"
 #include <GLFW/glfw3.h>
+#include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 #include <iostream>
 
@@ -301,6 +302,7 @@ public:
     if (key == 'g') {
       if (gondola)
         gondola->Start();
+        refreshScreen();
     }
   }
 
