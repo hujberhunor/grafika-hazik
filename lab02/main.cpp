@@ -182,6 +182,7 @@ private:
   float radius;   // kerék sugara
   float lambda;   // tehetetlenségi tényező
   float mass;     // tömeg
+  float rotation = 0.0f;
 
 public:
   Gondola(Spline *spline) : spline(spline) {
@@ -204,7 +205,6 @@ public:
     }
   }
 
-
   void Animate(float dt) {
     if (state != ROLLING || spline == nullptr)
       return;
@@ -218,7 +218,7 @@ public:
 
     // biztosítsuk, hogy a normális lefelé mutasson (dot < 0)
     if (dot(normal, vec2(0, -1)) < 0)
-        normal = -normal;
+      normal = -normal;
 
     const vec2 gravity = vec2(0, -40); // gravitáció
 
@@ -227,27 +227,30 @@ public:
     velocity += acc * dt;
 
     // spline paraméter növelése
-    float tangentLength = std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
+    float tangentLength =
+        std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
     float speedAlongSpline = velocity / tangentLength;
     param += speedAlongSpline * dt;
+
+    float deltaDistance = tangentLength * speedAlongSpline * dt;
+    rotation += deltaDistance / radius;
 
     vec3 newPos3 = spline->r(param);
     pos = vec2(newPos3.x, newPos3.y);
 
     // nyomóerő
-    float nyomoEro = dot(gravity, normal) + lambda * velocity * velocity / radius;
+    float nyomoEro =
+        dot(gravity, normal) + lambda * velocity * velocity / radius;
 
-    // DEBUG:
-    std::cout << "======== DEBUG ANIMATE ========\n";
-    std::cout << "dt: " << dt << "\n";
-    std::cout << "param: " << param << "\n";
-    std::cout << "pos: (" << pos.x << ", " << pos.y << ")\n";
-    std::cout << "velocity: " << velocity << "\n";
-    std::cout << "acc: " << acc << "\n";
-    std::cout << "tangentLength: " << tangentLength << "\n";
-    std::cout << "speedAlongSpline: " << speedAlongSpline << "\n";
-    std::cout << "nyomoEro: " << nyomoEro << "\n";
-    std::cout << "===============================\n";
+    // // DEBUG:
+    // std::cout << "dt: " << dt << "\n";
+    // std::cout << "param: " << param << "\n";
+    // std::cout << "pos: (" << pos.x << ", " << pos.y << ")\n";
+    // std::cout << "velocity: " << velocity << "\n";
+    // std::cout << "acc: " << acc << "\n";
+    // std::cout << "tangentLength: " << tangentLength << "\n";
+    // std::cout << "speedAlongSpline: " << speedAlongSpline << "\n";
+    // std::cout << "nyomoEro: " << nyomoEro << "\n";
 
     if (nyomoEro < 0) {
       std::cout << "FALLEN! nyomoEro < 0\n";
@@ -260,7 +263,6 @@ public:
     }
   }
 
-
   //  FIX ÉRTÉKEKKEL MEGy
   // void Animate(float dt) {
   //   if (state != ROLLING || spline == nullptr)
@@ -268,7 +270,8 @@ public:
   //   param += 0.5f * dt;  // FIX TEMPÓ
   //   vec3 p = spline->r(param);
   //   pos = vec2(p.x, p.y);
-  //   std::cout << "Moving! param = " << param << ", pos = " << pos.x << ", " << pos.y << std::endl;
+  //   std::cout << "Moving! param = " << param << ", pos = " << pos.x << ", "
+  //   << pos.y << std::endl;
   // }
 
   vec2 getPosition() const { return pos; }
@@ -279,9 +282,11 @@ public:
     if (state == WAITING)
       return;
 
-    std::cout << "DRAW gondola at pos: " << pos.x << ", " << pos.y << std::endl;
+    mat4 model =
+        translate(vec3(pos.x, pos.y, 0)) * rotate(rotation, vec3(0, 0, 1));
+    mat4 MVP = viewMatrix * model;
 
-    // kör kirajzolása
+    // kör
     Geometry<vec2> circle;
     std::vector<vec2> vtx;
     const int n = 32;
@@ -293,12 +298,31 @@ public:
     circle.Vtx() = vtx;
     circle.updateGPU();
 
-    // MVP mátrix
-    mat4 model = translate(vec3(pos.x, pos.y, 0));
-    mat4 MVP = viewMatrix * model;
-
     gpu->setUniform(MVP, "MVP");
     circle.Draw(gpu, GL_TRIANGLE_FAN, vec3(0, 0, 1));
+
+    // küllők külön függvényből
+    DrawSpokes(gpu, viewMatrix * model);
+  }
+
+  void DrawSpokes(GPUProgram *gpu, const mat4 &modelMatrix) {
+    const int spokeCount = 8;
+    Geometry<vec2> spokes;
+    std::vector<vec2> lines;
+
+    for (int i = 0; i < spokeCount; ++i) {
+      float angle = i * 2 * M_PI / spokeCount;
+      vec2 tip = vec2(radius * cos(angle), radius * sin(angle));
+      lines.push_back(vec2(0, 0)); // középpont
+      lines.push_back(tip);        // küllő vége
+    }
+
+    spokes.Vtx() = lines;
+    spokes.updateGPU();
+
+    mat4 MVP = modelMatrix; // a hívóban már MVP = view * model lesz
+    gpu->setUniform(MVP, "MVP");
+    spokes.Draw(gpu, GL_LINES, vec3(1, 1, 1));
   }
 };
 
@@ -337,7 +361,7 @@ public:
 
   void onTimeElapsed(float startTime, float endTime) {
     float dt = endTime - startTime;
-    if (gondola){
+    if (gondola) {
       gondola->Animate(dt);
       refreshScreen(); // hogy újrarajzolja
     }
