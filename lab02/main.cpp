@@ -72,8 +72,6 @@ public:
 class Spline {
   Geometry<vec3> cps; // control points
   Geometry<float> ts; // parameter (knot) values
-  // Folytonos, sima görbét hozhatunk létre a pontok és azokhoz tartozó
-  // érintővektorok (sebességek) alapján.
   vec3 Hermite(vec3 p0, vec3 v0, float t0, vec3 p1, vec3 v1, float t1,
                float t) {
     float dt = t1 - t0;
@@ -104,7 +102,6 @@ public:
   }
 
   // Lokálja meglyik szakaszra esik a t paraméter
-
   vec3 r(float tParam) {
     for (int i = 0; i < cp.size() - 1; i++) {
       if (t[i] <= tParam && tParam <= t[i + 1]) {
@@ -175,7 +172,7 @@ public:
       return;
 
     mat4 MVP = viewMatrix;
-    gpu->setUniform(MVP, "MVP"); // <-- hozzáad
+    gpu->setUniform(MVP, "MVP");
 
     // spline kirajzolása
     float dt = 0.01f;
@@ -230,75 +227,67 @@ public:
     }
   }
 
+
   void Animate(float dt) {
-    if (state != ROLLING || spline == nullptr)
-      return;
+      if (state != ROLLING || spline == nullptr)
+          return;
 
-    // spline pont és érintő
-    vec3 p3 = spline->r(param);
-    vec3 d3 = spline->dr(param);
-    vec2 r = vec2(p3.x, p3.y);
-    vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
-    vec2 normal = vec2(-dr.y, dr.x);       // normális
+      // spline pont és derivált
+      vec3 p3 = spline->r(param);
+      vec3 d3 = spline->dr(param);
+      vec2 r = vec2(p3.x, p3.y);
+      vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
+      vec2 normal = vec2(-dr.y, dr.x);       // normális
 
-    // biztosítsuk, hogy a normális lefelé mutasson (dot < 0)
-    if (dot(normal, vec2(0, -1)) < 0)
-      normal = -normal;
+      // normális lefelé mutasson
+      if (dot(normal, vec2(0, -1)) < 0)
+          normal = -normal;
 
-    const vec2 gravity = vec2(0, -40); // gravitáció
+      const vec2 gravity = vec2(0, -40); // gravitáció
 
-    // gyorsulás vetítése az érintőre
-    float acc = dot(gravity, dr) / (1.0f + lambda);
-    velocity += acc * dt;
+      float acc = dot(gravity, dr) / (1.0f + lambda);
+      velocity += acc * dt;
 
-    // spline paraméter növelése
-    float tangentLength =
-        std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
-    float speedAlongSpline = velocity / tangentLength;
-    param += speedAlongSpline * dt * 0.5 / tangentLength;
+      float derivLength = length(vec2(d3.x, d3.y));
+      if (derivLength < 0.0001f) derivLength = 0.0001f;
 
-    float deltaDistance = tangentLength * speedAlongSpline * dt;
-    rotation += deltaDistance / radius;
+      float paramStep = velocity * dt * 0.6f / derivLength;
+      param += paramStep;
 
-    vec3 newPos3 = spline->r(param);
-    pos = vec2(newPos3.x, newPos3.y);
+      // új pozíció és forgás
+      float deltaDistance = paramStep * derivLength;
+      rotation += deltaDistance / radius;
 
-    // nyomóerő
-    float nyomoEro =
-        dot(gravity, normal) + lambda * velocity * velocity / radius;
+      vec3 newPos3 = spline->r(param);
+      pos = vec2(newPos3.x, newPos3.y);
 
-    // // DEBUG:
-    // std::cout << "dt: " << dt << "\n";
-    // std::cout << "param: " << param << "\n";
-    // std::cout << "pos: (" << pos.x << ", " << pos.y << ")\n";
-    // std::cout << "velocity: " << velocity << "\n";
-    // std::cout << "acc: " << acc << "\n";
-    // std::cout << "tangentLength: " << tangentLength << "\n";
-    // std::cout << "speedAlongSpline: " << speedAlongSpline << "\n";
-    // std::cout << "nyomoEro: " << nyomoEro << "\n";
+      // nyomóerő számítás
+      float nyomoEro = dot(gravity, normal) + lambda * velocity * velocity / radius;
 
-    if (nyomoEro < 0) {
-      std::cout << "FALLEN! nyomoEro < 0\n";
-      state = FALLEN;
-      return;
-    }
+      // leesés vagy visszagurulás
+      if (nyomoEro < 0) {
+          std::cout << "FALLEN! nyomoEro < 0\n";
+          state = FALLEN;
+          return;
+      }
 
-    if (velocity < 0) {
-      std::cout << "STOPPED! velocity < 0\n";
-      param = 0.01f;
-      vec3 p = spline->r(param);
-      pos = vec2(p.x, p.y);
-      velocity = 0.0f;
-      state = WAITING;
-      return;
-    }
+      if (velocity < 0) {
+          std::cout << "STOPPED! velocity < 0\n";
+          param = 0.01f;
+          vec3 p = spline->r(param);
+          pos = vec2(p.x, p.y);
+          velocity = 0.0f;
+          state = WAITING;
+          return;
+      }
 
-    if (param > spline->t.back()) {
-      std::cout << "FALLEN! param > spline->t.back()\n";
-      state = FALLEN;
-      return;
-    }
+      if (param > spline->t.back()) {
+          std::cout << "FALLEN! param > spline->t.back()\n";
+          state = FALLEN;
+          return;
+      }
   }
+
 
   vec2 getPosition() const { return pos; }
 
@@ -327,7 +316,7 @@ public:
     gpu->setUniform(MVP, "MVP");
     circle.Draw(gpu, GL_TRIANGLE_FAN, vec3(0, 0, 1));
 
-    std::cout << "DEBUG: Gondola megrajzolva";
+    // std::cout << "DEBUG: Gondola megrajzolva";
     DrawSpokes(gpu, viewMatrix * model);
   }
 
@@ -349,7 +338,7 @@ public:
     mat4 MVP = modelMatrix; // a hívóban már MVP = view * model lesz
     gpu->setUniform(MVP, "MVP");
     spokes.Draw(gpu, GL_LINES, vec3(1, 1, 1));
-    std::cout << "DEBUG: Küllők megrajzolva";
+    // std::cout << "DEBUG: Küllők megrajzolva";
   }
 };
 
@@ -400,7 +389,7 @@ public:
     float dt = endTime - startTime;
     if (gondola) {
       gondola->Animate(dt);
-      refreshScreen(); // hogy újrarajzolja
+      refreshScreen();
     }
   }
 
@@ -415,7 +404,7 @@ public:
 
     spline->drawSpline(gpuProgram, viewMatrix);
     if (gondola)
-      gondola->Draw(gpuProgram, viewMatrix); // <-- ez rajzolja ki a mozgó kört!
+      gondola->Draw(gpuProgram, viewMatrix);
   }
 };
 
