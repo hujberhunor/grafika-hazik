@@ -89,43 +89,52 @@ class Spline {
     return a3 * u3 + a2 * u2 + a1 * u + a0;
   }
 
-
 public:
-
-std::vector<vec3> &cp = cps.Vtx(); // alias a vezérlőpontokra
-std::vector<float> &t = ts.Vtx();  // alias a csomóértékekre
+  std::vector<vec3> &cp = cps.Vtx(); // alias a vezérlőpontokra
+  std::vector<float> &t = ts.Vtx();  // alias a csomóértékekre
   void AddControlPoint(vec3 p) {
     float ti = cp.size();
     cp.push_back(p);
     t.push_back(ti);
 
+    std::cout << '\n' << '\n';
+    std::cout << "DEBUG: Controll point placed: " << p.x << p.y;
+
     cps.updateGPU();
   }
 
   // Lokálja meglyik szakaszra esik a t paraméter
+
   vec3 r(float tParam) {
     for (int i = 0; i < cp.size() - 1; i++) {
       if (t[i] <= tParam && tParam <= t[i + 1]) {
         vec3 v0(0, 0, 0), v1(0, 0, 0);
 
-        // v0: sebesség az i. pontban
-        if (i > 0 && i < cp.size() - 1) {
-          vec3 right = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
-          vec3 left = (cp[i] - cp[i - 1]) / (t[i] - t[i - 1]);
-          v0 = 0.5f * (right + left);
-        }
+        // Belső szegmensek
+        if (i > 0 && i < cp.size() - 2) {
+          vec3 right0 = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
+          vec3 left0 = (cp[i] - cp[i - 1]) / (t[i] - t[i - 1]);
+          v0 = 0.5f * (right0 + left0);
 
-        // v1: sebesség az (i+1). pontban
-        if (i < cp.size() - 2) {
-          vec3 right = (cp[i + 2] - cp[i + 1]) / (t[i + 2] - t[i + 1]);
-          vec3 left = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
-          v1 = 0.5f * (right + left);
+          vec3 right1 = (cp[i + 2] - cp[i + 1]) / (t[i + 2] - t[i + 1]);
+          vec3 left1 = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
+          v1 = 0.5f * (right1 + left1);
+        }
+        // Első szegmens (i == 0)
+        else if (i == 0 && cp.size() >= 3) {
+          v1 = 0.5f * ((cp[i + 2] - cp[i + 1]) / (t[i + 2] - t[i + 1]) +
+                       (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]));
+        }
+        // Utolsó szegmens (i == n-2)
+        else if (i == cp.size() - 2 && cp.size() >= 3) {
+          v0 = 0.5f * ((cp[i + 1] - cp[i]) / (t[i + 1] - t[i]) +
+                       (cp[i] - cp[i - 1]) / (t[i] - t[i - 1]));
         }
 
         return Hermite(cp[i], v0, t[i], cp[i + 1], v1, t[i + 1], tParam);
       }
     }
-    return vec3(0, 0, 0); // Ha nem található intervallum
+    return vec3(0, 0, 0); // Ha nincs megfelelő intervallum
   }
 
   vec3 HermiteDeriv(vec3 p0, vec3 v0, float t0, vec3 p1, vec3 v1, float t1,
@@ -140,16 +149,21 @@ std::vector<float> &t = ts.Vtx();  // alias a csomóértékekre
     return (3.0f * a3 * u2 + 2.0f * a2 * u + v0);
   }
 
-  // derivált r
-  vec3 dr(float param) {
+  vec3 dr(float tParam) {
     for (int i = 0; i < cp.size() - 1; i++) {
-      if (t[i] <= param && param <= t[i + 1]) {
+      if (t[i] <= tParam && tParam <= t[i + 1]) {
         vec3 v0(0, 0, 0), v1(0, 0, 0);
-        if (i > 0)
-          v0 = (cp[i] - cp[i - 1]) / (t[i] - t[i - 1]);
-        if (i < cp.size() - 2)
-          v1 = (cp[i + 1] - cp[i]) / (t[i + 1] - t[i]);
-        return HermiteDeriv(cp[i], v0, t[i], cp[i + 1], v1, t[i + 1], param);
+
+        if (i == 0 && cp.size() > 2)
+          v1 = 0.5f * ((cp[i + 2] - cp[i + 1]) + (cp[i + 1] - cp[i]));
+        else if (i == cp.size() - 2 && cp.size() > 2)
+          v0 = 0.5f * ((cp[i + 1] - cp[i]) + (cp[i] - cp[i - 1]));
+        else if (i > 0 && i < cp.size() - 2) {
+          v0 = 0.5f * ((cp[i + 1] - cp[i]) + (cp[i] - cp[i - 1]));
+          v1 = 0.5f * ((cp[i + 2] - cp[i + 1]) + (cp[i + 1] - cp[i]));
+        }
+
+        return HermiteDeriv(cp[i], v0, t[i], cp[i + 1], v1, t[i + 1], tParam);
       }
     }
     return vec3(0, 0, 0);
@@ -201,7 +215,7 @@ public:
     param = 0.0f;
     pos = vec2(0, 0);
     velocity = 0.0f;
-    radius = 0.5f;
+    radius = 1.0f;
     lambda = 1.0f;
     mass = 1.0f;
   }
@@ -241,7 +255,7 @@ public:
     float tangentLength =
         std::max(0.001f, length(vec2(d3.x, d3.y))); // védelem 0 ellen
     float speedAlongSpline = velocity / tangentLength;
-    param += speedAlongSpline * dt;
+    param += speedAlongSpline * dt * 0.5 / tangentLength;
 
     float deltaDistance = tangentLength * speedAlongSpline * dt;
     rotation += deltaDistance / radius;
@@ -266,24 +280,25 @@ public:
     if (nyomoEro < 0) {
       std::cout << "FALLEN! nyomoEro < 0\n";
       state = FALLEN;
+      return;
     }
 
     if (velocity < 0) {
       std::cout << "STOPPED! velocity < 0\n";
+      param = 0.01f;
+      vec3 p = spline->r(param);
+      pos = vec2(p.x, p.y);
+      velocity = 0.0f;
       state = WAITING;
+      return;
+    }
+
+    if (param > spline->t.back()) {
+      std::cout << "FALLEN! param > spline->t.back()\n";
+      state = FALLEN;
+      return;
     }
   }
-
-  //  FIX ÉRTÉKEKKEL MEGy
-  // void Animate(float dt) {
-  //   if (state != ROLLING || spline == nullptr)
-  //     return;
-  //   param += 0.5f * dt;  // FIX TEMPÓ
-  //   vec3 p = spline->r(param);
-  //   pos = vec2(p.x, p.y);
-  //   std::cout << "Moving! param = " << param << ", pos = " << pos.x << ", "
-  //   << pos.y << std::endl;
-  // }
 
   vec2 getPosition() const { return pos; }
 
@@ -312,12 +327,12 @@ public:
     gpu->setUniform(MVP, "MVP");
     circle.Draw(gpu, GL_TRIANGLE_FAN, vec3(0, 0, 1));
 
-    // küllők külön függvényből
+    std::cout << "DEBUG: Gondola megrajzolva";
     DrawSpokes(gpu, viewMatrix * model);
   }
 
   void DrawSpokes(GPUProgram *gpu, const mat4 &modelMatrix) {
-    const int spokeCount = 8;
+    const int spokeCount = 4;
     Geometry<vec2> spokes;
     std::vector<vec2> lines;
 
@@ -334,6 +349,7 @@ public:
     mat4 MVP = modelMatrix; // a hívóban már MVP = view * model lesz
     gpu->setUniform(MVP, "MVP");
     spokes.Draw(gpu, GL_LINES, vec3(1, 1, 1));
+    std::cout << "DEBUG: Küllők megrajzolva";
   }
 };
 
@@ -348,9 +364,19 @@ public:
 
   void onInitialization() {
     spline = new Spline();
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     gondola = new Gondola(spline);
     // camera = new Camera2D();
     gpuProgram = new GPUProgram(vertSource, fragSource);
+
+    // spline->AddControlPoint(vec3(-8.33333f, 7.16667f, 0));
+    // spline->AddControlPoint(vec3(-4.56667f, -6.76667f, 0));
+    // spline->AddControlPoint(vec3(3.6f, -6.7f, 0));
+    // spline->AddControlPoint(vec3(1.46667f, -0.366666f, 0));
+    // spline->AddControlPoint(vec3(-2.73333f, -2.53333f, 0));
+    // spline->AddControlPoint(vec3(-0.433334f, -5.93333f, 0));
+    // spline->AddControlPoint(vec3(5.03333f, -4.66667f, 0));
+    // spline->AddControlPoint(vec3(8.56667f, 8.16667f, 0));
   }
 
   // Pontok hozzáadása
@@ -363,7 +389,7 @@ public:
   }
 
   void onKeyboard(int key) {
-    if (key == 'g') {
+    if (key == ' ') {
       if (gondola)
         gondola->Start();
       refreshScreen();
