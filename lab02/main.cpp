@@ -228,40 +228,42 @@ public:
   }
 
 
+
   void Animate(float dt) {
-      if (state != ROLLING || spline == nullptr)
-          return;
+      if (state != ROLLING || spline == nullptr) return;
 
       // spline pont és derivált
       vec3 p3 = spline->r(param);
       vec3 d3 = spline->dr(param);
       vec2 r = vec2(p3.x, p3.y);
       vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
-      vec2 normal = vec2(-dr.y, dr.x);       // normális
+      vec2 normal = vec2(-dr.y, dr.x);       // normálvektor
 
-      // normális lefelé mutasson
+      // normál lefelé mutasson
       if (dot(normal, vec2(0, -1)) < 0)
           normal = -normal;
 
-      const vec2 gravity = vec2(0, -40); // gravitáció
-
-      float acc = dot(gravity, dr) / (1.0f + lambda);
+      const vec2 gravity = vec2(0, -40); // gravitáció gyorsulás
+      float acc = dot(gravity, dr) / (1.0f + lambda); // tangenciális gyorsulás
       velocity += acc * dt;
 
       float derivLength = length(vec2(d3.x, d3.y));
       if (derivLength < 0.0001f) derivLength = 0.0001f;
 
-      float paramStep = velocity * dt * 0.6f / derivLength;
+      float paramStep = velocity * dt * 5.0f / derivLength;
       param += paramStep;
 
-      // új pozíció és forgás
+      // aktuális görbe pont (pozíció)
+      vec3 newPos3 = spline->r(param);
+      vec2 newPos2D = vec2(newPos3.x, newPos3.y);
+
+      pos = newPos2D - normal * radius;
+
+      // forgás frissítése (gördülés)
       float deltaDistance = paramStep * derivLength;
       rotation += deltaDistance / radius;
 
-      vec3 newPos3 = spline->r(param);
-      pos = vec2(newPos3.x, newPos3.y);
-
-      // nyomóerő számítás
+      // nyomóerő számítása
       float nyomoEro = dot(gravity, normal) + lambda * velocity * velocity / radius;
 
       // leesés vagy visszagurulás
@@ -275,7 +277,7 @@ public:
           std::cout << "STOPPED! velocity < 0\n";
           param = 0.01f;
           vec3 p = spline->r(param);
-          pos = vec2(p.x, p.y);
+          pos = vec2(p.x, p.y) + normal * radius;
           velocity = 0.0f;
           state = WAITING;
           return;
@@ -287,6 +289,7 @@ public:
           return;
       }
   }
+
 
 
   vec2 getPosition() const { return pos; }
@@ -358,14 +361,14 @@ public:
     // camera = new Camera2D();
     gpuProgram = new GPUProgram(vertSource, fragSource);
 
-    // spline->AddControlPoint(vec3(-8.33333f, 7.16667f, 0));
-    // spline->AddControlPoint(vec3(-4.56667f, -6.76667f, 0));
-    // spline->AddControlPoint(vec3(3.6f, -6.7f, 0));
-    // spline->AddControlPoint(vec3(1.46667f, -0.366666f, 0));
-    // spline->AddControlPoint(vec3(-2.73333f, -2.53333f, 0));
-    // spline->AddControlPoint(vec3(-0.433334f, -5.93333f, 0));
-    // spline->AddControlPoint(vec3(5.03333f, -4.66667f, 0));
-    // spline->AddControlPoint(vec3(8.56667f, 8.16667f, 0));
+    spline->AddControlPoint(vec3(-8.33333f, 7.16667f, 0));
+    spline->AddControlPoint(vec3(-4.56667f, -6.76667f, 0));
+    spline->AddControlPoint(vec3(3.6f, -6.7f, 0));
+    spline->AddControlPoint(vec3(1.46667f, -0.366666f, 0));
+    spline->AddControlPoint(vec3(-2.73333f, -2.53333f, 0));
+    spline->AddControlPoint(vec3(-0.433334f, -5.93333f, 0));
+    spline->AddControlPoint(vec3(5.03333f, -4.66667f, 0));
+    spline->AddControlPoint(vec3(8.56667f, 8.16667f, 0));
   }
 
   // Pontok hozzáadása
