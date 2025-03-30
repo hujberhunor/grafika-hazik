@@ -205,6 +205,7 @@ private:
   float lambda;   // tehetetlenségi tényező
   float mass;     // tömeg
   float rotation = 0.0f;
+  vec2 prevNormal = vec2(0, -1);  // kezdetben lefelé
 
 public:
   Gondola(Spline *spline) : spline(spline) {
@@ -237,20 +238,22 @@ public:
       vec3 d3 = spline->dr(param);
       vec2 r = vec2(p3.x, p3.y);
       vec2 dr = normalize(vec2(d3.x, d3.y)); // érintő
-      vec2 normal = vec2(-dr.y, dr.x);       // normálvektor
+      vec2 normal = vec2(-dr.y, dr.x);
 
-      // normál lefelé mutasson
-      if (dot(normal, vec2(0, -1)) < 0)
+      // Ha az új normál ~ellentétes az előzővel → fordítsuk meg
+      if (dot(normal, prevNormal) < 0)
           normal = -normal;
+
+      prevNormal = normal;  // elmentjük a következő lépéshez
 
       const vec2 gravity = vec2(0, -40); // gravitáció gyorsulás
       float acc = dot(gravity, dr) / (1.0f + lambda); // tangenciális gyorsulás
-      velocity += acc * dt;
+      velocity += acc * dt; // * 4.0;
 
       float derivLength = length(vec2(d3.x, d3.y));
       if (derivLength < 0.0001f) derivLength = 0.0001f;
 
-      float paramStep = velocity * dt * 5.0f / derivLength;
+      float paramStep = velocity * dt / derivLength;
       param += paramStep;
 
       // aktuális görbe pont (pozíció)
@@ -273,15 +276,33 @@ public:
           return;
       }
 
+
+
       if (velocity < 0) {
           std::cout << "STOPPED! velocity < 0\n";
+
+          // Kezdő pozíció
           param = 0.01f;
-          vec3 p = spline->r(param);
-          pos = vec2(p.x, p.y) + normal * radius;
+
+          vec3 startPos3D = spline->r(param);
+          vec3 startDeriv = spline->dr(param);
+          vec2 tangent = normalize(vec2(startDeriv.x, startDeriv.y));
+          vec2 normal = vec2(-tangent.y, tangent.x);
+
+          if (dot(normal, vec2(0, -1)) < 0)
+              normal = -normal;
+
+          pos = vec2(startPos3D.x, startPos3D.y) - normal * radius;
           velocity = 0.0f;
-          state = WAITING;
+          rotation = 0.0f;
+          prevNormal = normal;
+
+          // AUTOMATIKUS ÚJRAINDÍTÁS
+          state = ROLLING;
           return;
       }
+
+
 
       if (param > spline->t.back()) {
           std::cout << "FALLEN! param > spline->t.back()\n";
@@ -361,14 +382,14 @@ public:
     // camera = new Camera2D();
     gpuProgram = new GPUProgram(vertSource, fragSource);
 
-    spline->AddControlPoint(vec3(-8.33333f, 7.16667f, 0));
-    spline->AddControlPoint(vec3(-4.56667f, -6.76667f, 0));
-    spline->AddControlPoint(vec3(3.6f, -6.7f, 0));
-    spline->AddControlPoint(vec3(1.46667f, -0.366666f, 0));
-    spline->AddControlPoint(vec3(-2.73333f, -2.53333f, 0));
-    spline->AddControlPoint(vec3(-0.433334f, -5.93333f, 0));
-    spline->AddControlPoint(vec3(5.03333f, -4.66667f, 0));
-    spline->AddControlPoint(vec3(8.56667f, 8.16667f, 0));
+    // spline->AddControlPoint(vec3(-8.33333f, 7.16667f, 0));
+    // spline->AddControlPoint(vec3(-4.56667f, -6.76667f, 0));
+    // spline->AddControlPoint(vec3(3.6f, -6.7f, 0));
+    // spline->AddControlPoint(vec3(1.46667f, -0.366666f, 0));
+    // spline->AddControlPoint(vec3(-2.73333f, -2.53333f, 0));
+    // spline->AddControlPoint(vec3(-0.433334f, -5.93333f, 0));
+    // spline->AddControlPoint(vec3(5.03333f, -4.66667f, 0));
+    // spline->AddControlPoint(vec3(8.56667f, 8.16667f, 0));
   }
 
   // Pontok hozzáadása
@@ -388,13 +409,23 @@ public:
     }
   }
 
-  void onTimeElapsed(float startTime, float endTime) {
-    float dt = endTime - startTime;
-    if (gondola) {
-      gondola->Animate(dt);
+
+  void onTimeElapsed(float startTime, float endTime) override {
+      static float tend = 0;
+      const float dt = 0.01f; // fix kis időlépés
+      float tstart = tend;
+      tend = endTime;
+
+      for (float t = tstart; t < tend; t += dt) {
+          float Dt = fmin(dt, tend - t);
+          if (gondola && gondola->getState() == ROLLING) {
+              gondola->Animate(Dt);
+          }
+      }
+
       refreshScreen();
-    }
   }
+
 
   void onDisplay() {
     glClearColor(0.0f, 0.0f, 0.0f, 1);
