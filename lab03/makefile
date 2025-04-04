@@ -1,14 +1,15 @@
+
 # A projekt neve
 TARGET = main
 
 # A forrás fájlok
-SRCS = main.cpp ./lib/glad.c ./include/framework.cpp
+SRCS = main.cpp ./lib/glad.c ./include/framework.cpp ./lib/lodepng.cpp
 
 # A könyvtárak és az include fájlok
 INCLUDES = -I./include -I/usr/include/glm -I./lib/
 
 # A használt könyvtárak
-LIBS = -lstdc++fs -lglfw -lGL
+LIBS = -lstdc++fs -lglfw -lGL -lpng
 
 # A fordító és a flags
 CXX = g++
@@ -28,4 +29,3 @@ clean:
 # A "make run" parancs futtatásához
 run: $(TARGET)
 	./$(TARGET)
-
