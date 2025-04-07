@@ -1,8 +1,5 @@
-//=============================================================================================
-// Mercator térkép kirajzolása textúrával (Grafika Labor III Skeleton) — FIX:
-// framework kompatibilis
-//=============================================================================================
 #include "./include/framework.h"
+#include "include/lodepng.h"
 #include <iostream>
 #include <vector>
 
@@ -83,7 +80,7 @@ class Map {
 public:
   Map() {
     std::vector<vec3> image = decode();
-    texture = new Texture(64, 64, image); // használható konstruktor!
+    texture = new Texture(64, 64, image);
 
     float vertexCoords[] = {-1, -1, 1, -1, 1, 1, -1, 1};
 
@@ -116,9 +113,19 @@ public:
   ~Map() { delete texture; }
 };
 
+// --- //
+
+class Station {
+  vec2 position; // világkoordinátákban
+  Geometry<vec2> *points;
+
+public:
+};
+
 // ---- //
 
 class App : public glApp {
+  Geometry<vec3> *vert;
   GPUProgram *program;
   Map *map;
 
@@ -127,13 +134,29 @@ public:
 
   void onInitialization() {
     map = new Map();
+    vert = new Geometry<vec3>;
     program = new GPUProgram(vertSource, fragSource);
     glClearColor(0, 0, 0, 1);
   }
 
+  void onMousePressed(MouseButton but, int pX, int pY) {
+    float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
+    float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
+
+    vert->Vtx().push_back(vec3(ndcX, ndcY, 0));
+    printf("Lerakott pontok: %f %f \n", ndcX, ndcY);
+    vert->updateGPU();
+    refreshScreen();
+  }
+
   void onDisplay() {
     glClear(GL_COLOR_BUFFER_BIT);
+    glPointSize(10.0f);
+    glViewport(0, 0, winWidth, winHeight);
+    glPointSize(10.0f);
+    glLineWidth(3.0f);
     map->Draw(program);
+    vert->Draw(program, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
   }
 };
 
