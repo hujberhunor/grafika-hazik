@@ -115,7 +115,6 @@ public:
 
 // --- //
 
-
 // ---- //
 
 class App : public glApp {
@@ -136,58 +135,61 @@ public:
   }
 
   Geometry<vec3> line(vec3 A_ndc, vec3 B_ndc) {
-      int segments = 100;
+    int segments = 100;
 
-      // Átváltás gömbre (Mercator inverz)
-      float lon1 = A_ndc.x * 180;
-      float lat1 = A_ndc.y * 85;
-      float lon2 = B_ndc.x * 180;
-      float lat2 = B_ndc.y * 85;
+    // Átváltás gömbre (Mercator inverz)
+    float lon1 = A_ndc.x * 180;
+    float lat1 = A_ndc.y * 85;
+    float lon2 = B_ndc.x * 180;
+    float lat2 = B_ndc.y * 85;
 
-      float phi1 = lat1 * M_PI / 180.0f, lambda1 = lon1 * M_PI / 180.0f;
-      float phi2 = lat2 * M_PI / 180.0f, lambda2 = lon2 * M_PI / 180.0f;
+    float phi1 = lat1 * M_PI / 180.0f, lambda1 = lon1 * M_PI / 180.0f;
+    float phi2 = lat2 * M_PI / 180.0f, lambda2 = lon2 * M_PI / 180.0f;
 
-      vec3 p1 = vec3(cos(phi1) * cos(lambda1), sin(phi1), cos(phi1) * sin(lambda1));
-      vec3 p2 = vec3(cos(phi2) * cos(lambda2), sin(phi2), cos(phi2) * sin(lambda2));
+    vec3 p1 =
+        vec3(cos(phi1) * cos(lambda1), sin(phi1), cos(phi1) * sin(lambda1));
+    vec3 p2 =
+        vec3(cos(phi2) * cos(lambda2), sin(phi2), cos(phi2) * sin(lambda2));
 
-      Geometry<vec3> result;
-      for (int i = 0; i <= segments; ++i) {
-          float t = i / (float)segments;
+    Geometry<vec3> result;
+    for (int i = 0; i <= segments; ++i) {
+      float t = i / (float)segments;
 
-          float omega = acos(dot(p1, p2));
-          vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
+      float omega = acos(dot(p1, p2));
+      vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
 
-          // Vissza Mercator
-          float lat = asin(pi.y);
-          float lon = atan2(pi.z, pi.x);
-          float x = lon / M_PI;
-          float y = lat * 2 / M_PI;
+      // Vissza Mercator
+      float lat = asin(pi.y);
+      float lon = atan2(pi.z, pi.x);
+      float x = lon / M_PI;
+      float y = lat * 2 / M_PI;
 
-          result.Vtx().push_back(vec3(x, y, 0));
-      }
+      result.Vtx().push_back(vec3(x, y, 0));
+    }
 
-      return result;
+    return result;
   }
 
   void onMousePressed(MouseButton but, int pX, int pY) {
-      float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
-      float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
+    float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
+    float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
 
-      vec3 newPoint(ndcX, ndcY, 0);
-      vert->Vtx().push_back(newPoint);
 
-      if (vert->Vtx().size() >= 2) {
-          vec3 a = vert->Vtx()[vert->Vtx().size() - 2];
-          vec3 b = vert->Vtx()[vert->Vtx().size() - 1];
+    vec3 newPoint(ndcX, ndcY * 85.0f * 2.0f / 180.0f, 0);
+    vert->Vtx().push_back(newPoint);
 
-          Geometry<vec3> arc = line(a, b);  // gömbi ív kiszámítása
-          for (vec3 v : arc.Vtx())
-              lines->Vtx().push_back(v);
-      }
+    if (vert->Vtx().size() >= 2) {
+      vec3 a = vert->Vtx()[vert->Vtx().size() - 2];
+      vec3 b = vert->Vtx()[vert->Vtx().size() - 1];
 
-      vert->updateGPU();
-      lines->updateGPU();
-      refreshScreen();
+      Geometry<vec3> arc = line(a, b); // gömbi ív kiszámítása
+      for (vec3 v : arc.Vtx())
+        lines->Vtx().push_back(v);
+    }
+
+    vert->updateGPU();
+    lines->updateGPU();
+    refreshScreen();
   }
 
   void onDisplay() {
