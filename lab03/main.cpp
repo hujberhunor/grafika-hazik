@@ -14,7 +14,6 @@ const char *vertSource = R"(
     }
 )";
 
-
 const char *fragSource = R"(
     #version 330 core
     uniform sampler2D textureUnit;
@@ -23,7 +22,6 @@ const char *fragSource = R"(
     uniform float time;
     in vec2 texCoord;
     out vec4 outColor;
-
     void main() {
         vec2 coord = texCoord;
         if (fixPoints) {
@@ -32,52 +30,31 @@ const char *fragSource = R"(
         }
         vec4 texColor = texture(textureUnit, coord);
 
+        // Parameters for shadow simulation
         float PI = 3.14159265358979323846;
-        float u = coord.x;
-        float v = coord.y;
+        float timeOffset = time * 0.2; // Controls speed of shadow movement
 
-        // Convert mercator coordinates to 3D sphere coordinates
-        float lon = (u - 0.5) * 2.0 * PI;  // longitude [-PI, PI]
-        float lat = atan(sinh(PI * (1.0 - 2.0 * v))); // latitude in radians
+        // Create a big, pronounced sinus wave
+        float amplitude = 0.25; // Height of the wave
+        float frequency = 1.0;  // Only one complete wave across the map
 
-        // Calculate 3D point on unit sphere
-        vec3 point = vec3(
-            cos(lat) * cos(lon),
-            cos(lat) * sin(lon),
-            sin(lat)
-        );
+        // Calculate sinus wave position
+        float waveX = coord.x * 2.0 * PI * frequency - timeOffset;
+        float waveHeight = sin(waveX) * amplitude;
 
-        // Sun position (changes with time)
-        float sunLon = mod(time * 15.0, 360.0) * PI / 180.0;
+        // Determine if point is in shadow based on y-position relative to wave
+        float shadowThreshold = 0.5 + waveHeight; // Center wave vertically + wave height
+        float shadowFactor = smoothstep(-0.07, 0.07, coord.y - shadowThreshold);
 
-        // Earth's axial tilt (23.5 degrees)
-        float tilt = 23.5 * PI / 180.0;
+        // Apply shadow effect (darker in shadow)
+        vec3 finalColor = mix(texColor.rgb * 0.4, texColor.rgb, shadowFactor);
 
-        // Calculate season (assume time is in hours, so we need to convert to yearly position)
-        float yearProgress = mod(time / (24.0 * 365.25), 1.0);
-        float seasonAngle = 2.0 * PI * yearProgress;
-
-        // Sun position in 3D, including Earth's axial tilt and seasonal variation
-        vec3 sunDir = vec3(
-            cos(0.0) * cos(sunLon),
-            cos(0.0) * sin(sunLon),
-            sin(tilt) * sin(seasonAngle)
-        );
-        sunDir = normalize(sunDir);
-
-        // Dot product tells us illumination factor
-        float dp = dot(point, sunDir);
-
-        // Adjust transition width for aesthetics
-        float lightFactor = smoothstep(-0.1, 0.1, dp);
-
-        // Apply lighting to texture
         if (texCoord.x > 0.0001 || texCoord.y > 0.0001)
-            outColor = vec4(texColor.rgb * lightFactor + texColor.rgb * 0.2 * (1.0 - lightFactor), texColor.a);
+            outColor = vec4(finalColor, texColor.a);
         else
             outColor = vec4(color, 1.0);
-    }    )";
-
+    }
+)";
 
 const int winWidth = 600, winHeight = 600;
 const int mapWidth = 64, mapHeight = 64;
