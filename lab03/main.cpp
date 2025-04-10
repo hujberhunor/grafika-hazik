@@ -67,7 +67,7 @@ const char *fragSource = R"(
         float illumination = dot(pointNormal, sunDir);
         float shadowFactor = smoothstep(-0.05, 0.05, -illumination);
 
-        vec3 finalColor = mix(texColor.rgb * 0.5, texColor.rgb, shadowFactor);
+        vec3 finalColor = (shadowFactor < 0.5) ? texColor.rgb * 0.5 : texColor.rgb;
 
         if (texCoord.x > 0.0001 || texCoord.y > 0.0001)
             outColor = vec4(finalColor, texColor.a);
