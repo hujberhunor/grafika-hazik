@@ -14,32 +14,74 @@ const char *vertSource = R"(
     }
 )";
 
+
 const char *fragSource = R"(
-    #version 330
+    #version 330 core
     uniform sampler2D textureUnit;
-    uniform bool fixPoints;  // Keep your existing uniform
-    uniform vec3 color;      // This is already being set by Geometry::Draw
+    uniform bool fixPoints;
+    uniform vec3 color;
+    uniform float time;
     in vec2 texCoord;
     out vec4 outColor;
 
     void main() {
-        // Check if texCoord is valid (this assumes texCoord is (0,0) when drawing non-textured geometry)
-        if (texCoord.x > 0.0001 || texCoord.y > 0.0001) {
-            vec2 coord = texCoord;
-            if (fixPoints) {
-                vec2 texSize = textureSize(textureUnit, 0);
-                coord = floor(texCoord * texSize) / texSize;
-            }
-            outColor = texture(textureUnit, coord);
-        } else {
-            // Use the color uniform for non-textured elements
-            outColor = vec4(color, 1.0);
+        vec2 coord = texCoord;
+        if (fixPoints) {
+            vec2 texSize = vec2(textureSize(textureUnit, 0));
+            coord = floor(texCoord * texSize) / texSize;
         }
-    }
-)";
+        vec4 texColor = texture(textureUnit, coord);
+
+        float PI = 3.14159265358979323846;
+        float u = coord.x;
+        float v = coord.y;
+
+        // Convert mercator coordinates to 3D sphere coordinates
+        float lon = (u - 0.5) * 2.0 * PI;  // longitude [-PI, PI]
+        float lat = atan(sinh(PI * (1.0 - 2.0 * v))); // latitude in radians
+
+        // Calculate 3D point on unit sphere
+        vec3 point = vec3(
+            cos(lat) * cos(lon),
+            cos(lat) * sin(lon),
+            sin(lat)
+        );
+
+        // Sun position (changes with time)
+        float sunLon = mod(time * 15.0, 360.0) * PI / 180.0;
+
+        // Earth's axial tilt (23.5 degrees)
+        float tilt = 23.5 * PI / 180.0;
+
+        // Calculate season (assume time is in hours, so we need to convert to yearly position)
+        float yearProgress = mod(time / (24.0 * 365.25), 1.0);
+        float seasonAngle = 2.0 * PI * yearProgress;
+
+        // Sun position in 3D, including Earth's axial tilt and seasonal variation
+        vec3 sunDir = vec3(
+            cos(0.0) * cos(sunLon),
+            cos(0.0) * sin(sunLon),
+            sin(tilt) * sin(seasonAngle)
+        );
+        sunDir = normalize(sunDir);
+
+        // Dot product tells us illumination factor
+        float dp = dot(point, sunDir);
+
+        // Adjust transition width for aesthetics
+        float lightFactor = smoothstep(-0.1, 0.1, dp);
+
+        // Apply lighting to texture
+        if (texCoord.x > 0.0001 || texCoord.y > 0.0001)
+            outColor = vec4(texColor.rgb * lightFactor + texColor.rgb * 0.2 * (1.0 - lightFactor), texColor.a);
+        else
+            outColor = vec4(color, 1.0);
+    }    )";
+
 
 const int winWidth = 600, winHeight = 600;
 const int mapWidth = 64, mapHeight = 64;
+float timeOfDay = 0;  // indul 0 óránál
 
 class Map {
   unsigned int vao, vbo[2];
@@ -134,6 +176,7 @@ class App : public glApp {
   Geometry<vec3> *lines;
   GPUProgram *program;
   Map *map;
+  float timeOfDay = 0; // <-- legyen a App osztály tagváltozója
 
 public:
   App() : glApp("cuccos") {}
@@ -145,6 +188,7 @@ public:
     program = new GPUProgram(vertSource, fragSource);
     glClearColor(0, 0, 0, 1);
   }
+
 
   Geometry<vec3> line(vec3 A_ndc, vec3 B_ndc) {
     int segments = 100;
@@ -198,6 +242,18 @@ public:
     return result;
   }
 
+
+
+  void onKeyboard(unsigned char key, int pX, int pY)  {
+      if (key == 'n') {
+          timeOfDay += 1.0f;
+          if (timeOfDay >= 24.0f) timeOfDay = 0.0f;
+          std::cout << "Time: " << timeOfDay << "h\n";
+          refreshScreen();
+      }
+  }
+
+
   void onMousePressed(MouseButton but, int pX, int pY) {
     float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
     float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
@@ -230,6 +286,7 @@ public:
 
     lines->Draw(program, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f));
     vert->Draw(program, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
+    program->setUniform(timeOfDay, "time");
   }
 };
 
