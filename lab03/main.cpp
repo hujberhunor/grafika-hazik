@@ -41,23 +41,17 @@ const char *fragSource = R"(
         }
         vec4 texColor = texture(textureUnit, coord);
 
-        // Parameters for Earth simulation
         float PI = 3.14159265358979323846;
-        float axisTilt = 23.0 * PI / 180.0; // Earth's axis tilt in radians
+        float axisTilt = 23.0 * PI / 180.0;
 
-        // Map coordinates to longitude/latitude
-        float longitude = (coord.x - 0.5) * 2.0 * PI;  // Map [0,1] to [-π,π]
-        float latitude = (0.5 - coord.y) * PI;  // Map [0,1] to [π/2,-π/2]
+        float longitude = (coord.x - 0.5) * 2.0 * PI;
+        float latitude = (0.5 - coord.y) * PI;
 
-        // Calculate sun position based on time (hours)
-        float hourAngle = time * PI / 12.0; // Convert 24 hours to 2π
+        float hourAngle = time * PI / 12.0;
 
-        // Calculate if the point is in daylight
-        // For summer solstice, sun is directly over the Tropic of Cancer (lat = 23.5°)
         float sunLat = axisTilt;
-        float sunLong = -hourAngle; // Sun moves from east to west
+        float sunLong = -hourAngle;
 
-        // Dot product of point's normal with sun direction gives illumination
         vec3 pointNormal = vec3(
             cos(latitude) * cos(longitude),
             sin(latitude),
@@ -70,11 +64,9 @@ const char *fragSource = R"(
             cos(sunLat) * sin(sunLong)
         );
 
-        // Inverting the illumination logic
         float illumination = dot(pointNormal, sunDir);
-        float shadowFactor = smoothstep(-0.05, 0.05, -illumination); // Added the negative sign here
+        float shadowFactor = smoothstep(-0.05, 0.05, -illumination);
 
-        // Apply shadow - darker in shadowed regions
         vec3 finalColor = mix(texColor.rgb * 0.5, texColor.rgb, shadowFactor);
 
         if (texCoord.x > 0.0001 || texCoord.y > 0.0001)
@@ -185,7 +177,7 @@ class App : public glApp {
   Geometry<vec3> *lines;
   GPUProgram *program;
   Map *map;
-  float timeOfDay = 0; // <-- legyen a App osztály tagváltozója
+  float timeOfDay = 0;
 
 public:
   App() : glApp("cuccos") {}
