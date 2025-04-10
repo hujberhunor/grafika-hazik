@@ -3,6 +3,16 @@
 #include <iostream>
 #include <vector>
 
+// Texture::Texture(int width, int height, std::vector<vec3> &image) {
+//     glGenTextures(1, &textureId);            // azonos�t� gener�l�sa
+//     glBindTexture(GL_TEXTURE_2D, textureId); // ez az akt�v innent�l
+//     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT,
+//                  &image[0]); // To GPU
+//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+//                     GL_NEAREST); // sampling
+//     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//   }
+
 const char *vertSource = R"(
     #version 330
     layout(location = 0) in vec2 vertexXY;
@@ -30,24 +40,41 @@ const char *fragSource = R"(
         }
         vec4 texColor = texture(textureUnit, coord);
 
-        // Parameters for shadow simulation
+        // Parameters for Earth simulation
         float PI = 3.14159265358979323846;
-        float timeOffset = time * 0.2; // Controls speed of shadow movement
+        float axisTilt = 23.0 * PI / 180.0; // Earth's axis tilt in radians
 
-        // Create a big, pronounced sinus wave
-        float amplitude = 0.25; // Height of the wave
-        float frequency = 1.0;  // Only one complete wave across the map
+        // Map coordinates to longitude/latitude
+        float longitude = (coord.x - 0.5) * 2.0 * PI;  // Map [0,1] to [-π,π]
+        float latitude = (0.5 - coord.y) * PI;  // Map [0,1] to [π/2,-π/2]
 
-        // Calculate sinus wave position
-        float waveX = coord.x * 2.0 * PI * frequency - timeOffset;
-        float waveHeight = sin(waveX) * amplitude;
+        // Calculate sun position based on time (hours)
+        float hourAngle = time * PI / 12.0; // Convert 24 hours to 2π
 
-        // Determine if point is in shadow based on y-position relative to wave
-        float shadowThreshold = 0.5 + waveHeight; // Center wave vertically + wave height
-        float shadowFactor = smoothstep(-0.07, 0.07, coord.y - shadowThreshold);
+        // Calculate if the point is in daylight
+        // For summer solstice, sun is directly over the Tropic of Cancer (lat = 23.5°)
+        float sunLat = axisTilt;
+        float sunLong = -hourAngle; // Sun moves from east to west
 
-        // Apply shadow effect (darker in shadow)
-        vec3 finalColor = mix(texColor.rgb * 0.4, texColor.rgb, shadowFactor);
+        // Dot product of point's normal with sun direction gives illumination
+        vec3 pointNormal = vec3(
+            cos(latitude) * cos(longitude),
+            sin(latitude),
+            cos(latitude) * sin(longitude)
+        );
+
+        vec3 sunDir = vec3(
+            cos(sunLat) * cos(sunLong),
+            sin(sunLat),
+            cos(sunLat) * sin(sunLong)
+        );
+
+        // Inverting the illumination logic
+        float illumination = dot(pointNormal, sunDir);
+        float shadowFactor = smoothstep(-0.05, 0.05, -illumination); // Added the negative sign here
+
+        // Apply shadow - darker in shadowed regions
+        vec3 finalColor = mix(texColor.rgb * 0.5, texColor.rgb, shadowFactor);
 
         if (texCoord.x > 0.0001 || texCoord.y > 0.0001)
             outColor = vec4(finalColor, texColor.a);
@@ -55,6 +82,7 @@ const char *fragSource = R"(
             outColor = vec4(color, 1.0);
     }
 )";
+
 
 const int winWidth = 600, winHeight = 600;
 const int mapWidth = 64, mapHeight = 64;
@@ -111,22 +139,28 @@ class Map {
   }
 
 public:
-  Map() {
+
+Map() {
     std::vector<vec3> image = decode();
-    texture = new Texture(64, 64, image);
+
+    // Üres texture létrehozás
+    texture = new Texture(64, 64);
+
+    // Textúra bindolása
+    texture->Bind(0);
+
+    // Adat feltöltése a GPU-ra
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 64, 64, GL_RGB, GL_FLOAT, &image[0]);
 
     float vertexCoords[] = {-1, -1, 1, -1, 1, 1, -1, 1};
-
     float texCoords[] = {0, 0, 1, 0, 1, 1, 0, 1};
 
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 
     glGenBuffers(2, vbo);
-
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexCoords), vertexCoords,
-                 GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexCoords), vertexCoords, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 
@@ -134,7 +168,8 @@ public:
     glBufferData(GL_ARRAY_BUFFER, sizeof(texCoords), texCoords, GL_STATIC_DRAW);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-  }
+}
+
 
   void Draw(GPUProgram *program) {
     program->setUniform(0, "textureUnit");
@@ -221,11 +256,13 @@ public:
 
 
 
-  void onKeyboard(unsigned char key, int pX, int pY)  {
+    void onKeyboard(int key) override{
       if (key == 'n') {
+          std::cout << "Menyomva";
           timeOfDay += 1.0f;
           if (timeOfDay >= 24.0f) timeOfDay = 0.0f;
           std::cout << "Time: " << timeOfDay << "h\n";
+          program->setUniform(timeOfDay, "time"); // Set the uniform here
           refreshScreen();
       }
   }
