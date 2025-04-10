@@ -172,143 +172,114 @@ public:
 
 // --- //
 
+
+
 class App : public glApp {
-  Geometry<vec3> *vert;
-  Geometry<vec3> *lines;
-  GPUProgram *program;
-  Map *map;
-  float timeOfDay = 0;
+    GPUProgram *program;
+    Map *map;
+    Geometry<vec3> *vert, *lines;
+    std::vector<vec2> stations;  // lat, lon
+    float timeOfDay = 0;
 
 public:
-  App() : glApp("cuccos") {}
+    App() : glApp("Mercator Route Planner - BME") {}
 
-  void onInitialization() {
-    map = new Map();
-    vert = new Geometry<vec3>;
-    lines = new Geometry<vec3>;
-    program = new GPUProgram(vertSource, fragSource);
-    glClearColor(0, 0, 0, 1);
-  }
+    void onInitialization() {
+        map = new Map();
+        vert = new Geometry<vec3>;
+        lines = new Geometry<vec3>;
+        program = new GPUProgram(vertSource, fragSource);
+        glClearColor(0, 0, 0, 1);
+    }
 
+    vec3 SpherePos(float lat, float lon) {
+        return vec3(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon));
+    }
 
-  Geometry<vec3> line(vec3 A_ndc, vec3 B_ndc) {
-      int segments = 100;
+    vec3 MercatorToNDC(float lat, float lon) {
+        float x = lon / M_PI;
 
-      // Extract original coordinates (assuming A_ndc and B_ndc are already in the expected format)
-      float lon1 = A_ndc.x * 180;
-      float lat1 = A_ndc.y * (180.0f / 2.0f); // Adjust based on how you scaled in onMousePressed
-      float lon2 = B_ndc.x * 180;
-      float lat2 = B_ndc.y * (180.0f / 2.0f);
+        float latMin = -85.0f * M_PI / 180.0f;
+        float latMax =  85.0f * M_PI / 180.0f;
+        float yMin = log(tan(M_PI/4 + latMin/2));
+        float yMax = log(tan(M_PI/4 + latMax/2));
 
-      // Convert to radians
-      float phi1 = lat1 * M_PI / 180.0f, lambda1 = lon1 * M_PI / 180.0f;
-      float phi2 = lat2 * M_PI / 180.0f, lambda2 = lon2 * M_PI / 180.0f;
+        float y = log(tan(M_PI/4 + lat/2));
+        y = 1.0f - 2.0f * (y - yMin) / (yMax - yMin);
 
-      // Convert to 3D sphere coordinates
-      vec3 p1 = vec3(cos(phi1) * cos(lambda1), sin(phi1), cos(phi1) * sin(lambda1));
-      vec3 p2 = vec3(cos(phi2) * cos(lambda2), sin(phi2), cos(phi2) * sin(lambda2));
+        return vec3(x, y, 0);
+    }
 
-      Geometry<vec3> result;
-
-      // Start with first point exactly as provided
-      result.Vtx().push_back(A_ndc);
-
-      // Interpolate interior points
-      for (int i = 1; i < segments; ++i) {
-        float t = i / (float)segments;
+    void generateRoute(vec2 a, vec2 b) {
+        vec3 p1 = SpherePos(a.x, a.y);
+        vec3 p2 = SpherePos(b.x, b.y);
 
         float omega = acos(dot(p1, p2));
-        // Avoid division by zero if points are very close
-        if (omega < 1e-6) {
-          vec3 pi = p1 * (1-t) + p2 * t; // Linear interpolation for close points
-          pi = normalize(pi); // Ensure point is on sphere
-        } else {
-          vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
+        float distance = omega * 40000.0f / (2.0f * M_PI);
+        std::cout << "Distance: " << distance << " km" << std::endl;
 
-          // Convert back to Mercator projection
-          float lat = asin(pi.y);
-          float lon = atan2(pi.z, pi.x);
-
-          // Convert to NDC using the same scale as in onMousePressed
-          float x = lon / M_PI;
-          float y = lat * 2.0f / M_PI;
-
-          result.Vtx().push_back(vec3(x, y, 0));
+        int segments = 100;
+        for (int i = 0; i <= segments; i++) {
+            float t = (float)i / segments;
+            vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
+            float lat = asin(pi.y);
+            float lon = atan2(pi.z, pi.x);
+            lines->Vtx().push_back(MercatorToNDC(lat, lon));
         }
-      }
-
-      // End with last point exactly as provided
-      result.Vtx().push_back(B_ndc);
-
-      return result;
     }
 
+    void onMousePressed(MouseButton but, int pX, int pY) {
+        float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
+        float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
 
-  void onKeyboard(int key) override {
-    if (key == 'n') {
-      std::cout << "Menyomva";
-      timeOfDay += 1.0f;
-      if (timeOfDay >= 24.0f)
-        timeOfDay = 0.0f;
-      std::cout << "Time: " << timeOfDay << "h\n";
-      program->setUniform(timeOfDay, "time"); // Set the uniform here
-      refreshScreen();
-    }
-  }
 
-  void onMousePressed(MouseButton but, int pX, int pY) {
-    // Convert screen coordinates to NDC [-1,1]
-    float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
-    float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
+        float lon = ndcX * M_PI;
 
-    // DEGUB
-    std::cout << ndcX << " " << ndcY;
+        float latMin = -85.0f * M_PI / 180.0f;
+        float latMax =  85.0f * M_PI / 180.0f;
+        float yMin = log(tan(M_PI/4 + latMin/2));
+        float yMax = log(tan(M_PI/4 + latMax/2));
 
-    // Store the point
-    vec3 newPoint(ndcX, ndcY, 0);
-    vert->Vtx().push_back(newPoint);
+        float mercY = ((1.0f - ndcY) / 2.0f) * (yMax - yMin) + yMin;
+        float lat = 2 * atan(exp(mercY)) - M_PI / 2;
 
-    // If we have at least two points, calculate the route
-    if (vert->Vtx().size() >= 2) {
-      vec3 a = vert->Vtx()[vert->Vtx().size() - 2];
-      vec3 b = vert->Vtx()[vert->Vtx().size() - 1];
+        stations.push_back(vec2(lat, lon));
+        vert->Vtx().push_back(MercatorToNDC(lat, lon));
 
-      // Calculate and print distance
-      float lon1 = (a.x + 1.0f) * M_PI;
-      float lat1 = atan(sinh((1.0f - (a.y + 1.0f) / 2.0f) * M_PI));
-      float lon2 = (b.x + 1.0f) * M_PI;
-      float lat2 = atan(sinh((1.0f - (b.y + 1.0f) / 2.0f) * M_PI));
+        int n = stations.size();
+        if (n >= 2) {
+            generateRoute(stations[n-2], stations[n-1]);
+        }
 
-      vec3 p1 = vec3(cos(lat1) * cos(lon1), sin(lat1), cos(lat1) * sin(lon1));
-      vec3 p2 = vec3(cos(lat2) * cos(lon2), sin(lat2), cos(lat2) * sin(lon2));
-
-      float omega = acos(dot(p1, p2));
-      float distance = omega * 40000.0f / (2.0f * M_PI);
-      std::cout << "Distance: " << distance << " km" << std::endl;
-
-      // Draw the route
-      Geometry<vec3> arc = line(a, b);
-      for (vec3 v : arc.Vtx())
-        lines->Vtx().push_back(v);
+        std::cout << "" << lat << "f, " << lon << std::endl;
+        vert->updateGPU();
+        lines->updateGPU();
+        refreshScreen();
     }
 
-    vert->updateGPU();
-    lines->updateGPU();
-    refreshScreen();
-  }
+    void onKeyboard(int key) override {
+        if (key == 'n') {
+            timeOfDay += 1.0f;
+            if (timeOfDay >= 24.0f)
+                timeOfDay = 0.0f;
+            std::cout << "Time: " << timeOfDay << "h\n";
+            program->setUniform(timeOfDay, "time");
+            refreshScreen();
+        }
+    }
 
-  void onDisplay() {
-    glClear(GL_COLOR_BUFFER_BIT);
-    glViewport(0, 0, winWidth, winHeight);
-    glPointSize(10.0f);
-    glLineWidth(3.0f);
+    void onDisplay() {
+        glClear(GL_COLOR_BUFFER_BIT);
+        glViewport(0, 0, winWidth, winHeight);
+        glPointSize(10.0f);
+        glLineWidth(3.0f);
 
-    map->Draw(program);
+        map->Draw(program);
 
-    lines->Draw(program, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f));
-    vert->Draw(program, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
-    program->setUniform(timeOfDay, "time");
-  }
+        lines->Draw(program, GL_LINE_STRIP, vec3(1, 1, 0));   // Sárga vonalak
+        vert->Draw(program, GL_POINTS, vec3(1, 0, 0));        // Piros pontok
+        program->setUniform(timeOfDay, "time");
+    }
 };
 
 App app;
