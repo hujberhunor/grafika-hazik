@@ -14,7 +14,6 @@ const char *vertSource = R"(
     }
 )";
 
-
 const char *fragSource = R"(
     #version 330
     uniform sampler2D textureUnit;
@@ -38,7 +37,6 @@ const char *fragSource = R"(
         }
     }
 )";
-
 
 const int winWidth = 600, winHeight = 600;
 const int mapWidth = 64, mapHeight = 64;
@@ -120,18 +118,16 @@ public:
   }
 
   void Draw(GPUProgram *program) {
-      program->setUniform(0, "textureUnit");
-      texture->Bind(0);
-      glBindVertexArray(vao);
-      glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    program->setUniform(0, "textureUnit");
+    texture->Bind(0);
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
   }
 
   ~Map() { delete texture; }
 };
 
 // --- //
-
-// ---- //
 
 class App : public glApp {
   Geometry<vec3> *vert;
@@ -153,35 +149,51 @@ public:
   Geometry<vec3> line(vec3 A_ndc, vec3 B_ndc) {
     int segments = 100;
 
-    // Átváltás gömbre (Mercator inverz)
+    // Extract original coordinates (assuming A_ndc and B_ndc are already in the expected format)
     float lon1 = A_ndc.x * 180;
-    float lat1 = A_ndc.y * 85;
+    float lat1 = A_ndc.y * (180.0f / 2.0f); // Adjust based on how you scaled in onMousePressed
     float lon2 = B_ndc.x * 180;
-    float lat2 = B_ndc.y * 85;
+    float lat2 = B_ndc.y * (180.0f / 2.0f);
 
+    // Convert to radians
     float phi1 = lat1 * M_PI / 180.0f, lambda1 = lon1 * M_PI / 180.0f;
     float phi2 = lat2 * M_PI / 180.0f, lambda2 = lon2 * M_PI / 180.0f;
 
-    vec3 p1 =
-        vec3(cos(phi1) * cos(lambda1), sin(phi1), cos(phi1) * sin(lambda1));
-    vec3 p2 =
-        vec3(cos(phi2) * cos(lambda2), sin(phi2), cos(phi2) * sin(lambda2));
+    // Convert to 3D sphere coordinates
+    vec3 p1 = vec3(cos(phi1) * cos(lambda1), sin(phi1), cos(phi1) * sin(lambda1));
+    vec3 p2 = vec3(cos(phi2) * cos(lambda2), sin(phi2), cos(phi2) * sin(lambda2));
 
     Geometry<vec3> result;
-    for (int i = 0; i <= segments; ++i) {
+
+    // Start with first point exactly as provided
+    result.Vtx().push_back(A_ndc);
+
+    // Interpolate interior points
+    for (int i = 1; i < segments; ++i) {
       float t = i / (float)segments;
 
       float omega = acos(dot(p1, p2));
-      vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
+      // Avoid division by zero if points are very close
+      if (omega < 1e-6) {
+        vec3 pi = p1 * (1-t) + p2 * t; // Linear interpolation for close points
+        pi = normalize(pi); // Ensure point is on sphere
+      } else {
+        vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
 
-      // Vissza Mercator
-      float lat = asin(pi.y);
-      float lon = atan2(pi.z, pi.x);
-      float x = lon / M_PI;
-      float y = lat * 2 / M_PI;
+        // Convert back to Mercator projection
+        float lat = asin(pi.y);
+        float lon = atan2(pi.z, pi.x);
 
-      result.Vtx().push_back(vec3(x, y, 0));
+        // Convert to NDC using the same scale as in onMousePressed
+        float x = lon / M_PI;
+        float y = lat * 2.0f / M_PI;
+
+        result.Vtx().push_back(vec3(x, y, 0));
+      }
     }
+
+    // End with last point exactly as provided
+    result.Vtx().push_back(B_ndc);
 
     return result;
   }
@@ -190,15 +202,15 @@ public:
     float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
     float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
 
-
-    vec3 newPoint(ndcX, ndcY * 85.0f * 2.0f / 180.0f, 0);
+    // Make sure this scales correctly to match what's expected in the line function
+    vec3 newPoint(ndcX, ndcY, 0);
     vert->Vtx().push_back(newPoint);
 
     if (vert->Vtx().size() >= 2) {
       vec3 a = vert->Vtx()[vert->Vtx().size() - 2];
       vec3 b = vert->Vtx()[vert->Vtx().size() - 1];
 
-      Geometry<vec3> arc = line(a, b); // gömbi ív kiszámítása
+      Geometry<vec3> arc = line(a, b);
       for (vec3 v : arc.Vtx())
         lines->Vtx().push_back(v);
     }
@@ -209,15 +221,15 @@ public:
   }
 
   void onDisplay() {
-      glClear(GL_COLOR_BUFFER_BIT);
-      glViewport(0, 0, winWidth, winHeight);
-      glPointSize(10.0f);
-      glLineWidth(3.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(0, 0, winWidth, winHeight);
+    glPointSize(10.0f);
+    glLineWidth(3.0f);
 
-      map->Draw(program);
+    map->Draw(program);
 
-      lines->Draw(program, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f));
-      vert->Draw(program, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
+    lines->Draw(program, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f));
+    vert->Draw(program, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
   }
 };
 
