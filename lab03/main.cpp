@@ -14,15 +14,25 @@ const char *vertSource = R"(
     }
 )";
 
+
 const char *fragSource = R"(
     #version 330
     uniform sampler2D textureUnit;
+    uniform bool fixPoints;
+    uniform vec3 color;
     in vec2 texCoord;
     out vec4 outColor;
+
     void main() {
-        outColor = texture(textureUnit, texCoord);
+        vec2 coord = texCoord;
+        if (fixPoints) {
+            vec2 texSize = textureSize(textureUnit, 0);
+            coord = floor(texCoord * texSize) / texSize;
+        }
+        outColor = texture(textureUnit, coord);
     }
 )";
+
 
 const int winWidth = 600, winHeight = 600;
 const int mapWidth = 64, mapHeight = 64;
