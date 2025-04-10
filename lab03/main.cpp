@@ -18,18 +18,24 @@ const char *vertSource = R"(
 const char *fragSource = R"(
     #version 330
     uniform sampler2D textureUnit;
-    uniform bool fixPoints;
-    uniform vec3 color;
+    uniform bool fixPoints;  // Keep your existing uniform
+    uniform vec3 color;      // This is already being set by Geometry::Draw
     in vec2 texCoord;
     out vec4 outColor;
 
     void main() {
-        vec2 coord = texCoord;
-        if (fixPoints) {
-            vec2 texSize = textureSize(textureUnit, 0);
-            coord = floor(texCoord * texSize) / texSize;
+        // Check if texCoord is valid (this assumes texCoord is (0,0) when drawing non-textured geometry)
+        if (texCoord.x > 0.0001 || texCoord.y > 0.0001) {
+            vec2 coord = texCoord;
+            if (fixPoints) {
+                vec2 texSize = textureSize(textureUnit, 0);
+                coord = floor(texCoord * texSize) / texSize;
+            }
+            outColor = texture(textureUnit, coord);
+        } else {
+            // Use the color uniform for non-textured elements
+            outColor = vec4(color, 1.0);
         }
-        outColor = texture(textureUnit, coord);
     }
 )";
 
@@ -114,10 +120,10 @@ public:
   }
 
   void Draw(GPUProgram *program) {
-    program->setUniform(0, "textureUnit");
-    texture->Bind(0);
-    glBindVertexArray(vao);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+      program->setUniform(0, "textureUnit");
+      texture->Bind(0);
+      glBindVertexArray(vao);
+      glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
   }
 
   ~Map() { delete texture; }
@@ -203,14 +209,15 @@ public:
   }
 
   void onDisplay() {
-    glClear(GL_COLOR_BUFFER_BIT);
-    glViewport(0, 0, winWidth, winHeight);
-    glPointSize(10.0f);
-    glLineWidth(3.0f);
+      glClear(GL_COLOR_BUFFER_BIT);
+      glViewport(0, 0, winWidth, winHeight);
+      glPointSize(10.0f);
+      glLineWidth(3.0f);
 
-    map->Draw(program);
-    lines->Draw(program, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f));
-    vert->Draw(program, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
+      map->Draw(program);
+
+      lines->Draw(program, GL_LINE_STRIP, vec3(1.0f, 1.0f, 0.0f));
+      vert->Draw(program, GL_POINTS, vec3(1.0f, 0.0f, 0.0f));
   }
 };
 
