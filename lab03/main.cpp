@@ -6,7 +6,8 @@
 // Texture::Texture(int width, int height, std::vector<vec3> &image) {
 //     glGenTextures(1, &textureId);            // azonos�t� gener�l�sa
 //     glBindTexture(GL_TEXTURE_2D, textureId); // ez az akt�v innent�l
-//     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT,
+//     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
+//     GL_FLOAT,
 //                  &image[0]); // To GPU
 //     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
 //                     GL_NEAREST); // sampling
@@ -83,10 +84,9 @@ const char *fragSource = R"(
     }
 )";
 
-
 const int winWidth = 600, winHeight = 600;
 const int mapWidth = 64, mapHeight = 64;
-float timeOfDay = 0;  // indul 0 óránál
+float timeOfDay = 0; // indul 0 óránál
 
 class Map {
   unsigned int vao, vbo[2];
@@ -139,18 +139,15 @@ class Map {
   }
 
 public:
-
-Map() {
+  Map() {
     std::vector<vec3> image = decode();
 
-    // Üres texture létrehozás
     texture = new Texture(64, 64);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    // Textúra bindolása
     texture->Bind(0);
-
-    // Adat feltöltése a GPU-ra
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 64, 64, GL_RGB, GL_FLOAT, &image[0]);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 64, 64, GL_RGB, GL_FLOAT,
+                    &image[0]);
 
     float vertexCoords[] = {-1, -1, 1, -1, 1, 1, -1, 1};
     float texCoords[] = {0, 0, 1, 0, 1, 1, 0, 1};
@@ -160,7 +157,8 @@ Map() {
 
     glGenBuffers(2, vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexCoords), vertexCoords, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexCoords), vertexCoords,
+                 GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 
@@ -168,8 +166,7 @@ Map() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(texCoords), texCoords, GL_STATIC_DRAW);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
-}
-
+  }
 
   void Draw(GPUProgram *program) {
     program->setUniform(0, "textureUnit");
@@ -203,83 +200,101 @@ public:
 
 
   Geometry<vec3> line(vec3 A_ndc, vec3 B_ndc) {
-    int segments = 100;
+      int segments = 100;
 
-    // Extract original coordinates (assuming A_ndc and B_ndc are already in the expected format)
-    float lon1 = A_ndc.x * 180;
-    float lat1 = A_ndc.y * (180.0f / 2.0f); // Adjust based on how you scaled in onMousePressed
-    float lon2 = B_ndc.x * 180;
-    float lat2 = B_ndc.y * (180.0f / 2.0f);
+      // Extract original coordinates (assuming A_ndc and B_ndc are already in the expected format)
+      float lon1 = A_ndc.x * 180;
+      float lat1 = A_ndc.y * (180.0f / 2.0f); // Adjust based on how you scaled in onMousePressed
+      float lon2 = B_ndc.x * 180;
+      float lat2 = B_ndc.y * (180.0f / 2.0f);
 
-    // Convert to radians
-    float phi1 = lat1 * M_PI / 180.0f, lambda1 = lon1 * M_PI / 180.0f;
-    float phi2 = lat2 * M_PI / 180.0f, lambda2 = lon2 * M_PI / 180.0f;
+      // Convert to radians
+      float phi1 = lat1 * M_PI / 180.0f, lambda1 = lon1 * M_PI / 180.0f;
+      float phi2 = lat2 * M_PI / 180.0f, lambda2 = lon2 * M_PI / 180.0f;
 
-    // Convert to 3D sphere coordinates
-    vec3 p1 = vec3(cos(phi1) * cos(lambda1), sin(phi1), cos(phi1) * sin(lambda1));
-    vec3 p2 = vec3(cos(phi2) * cos(lambda2), sin(phi2), cos(phi2) * sin(lambda2));
+      // Convert to 3D sphere coordinates
+      vec3 p1 = vec3(cos(phi1) * cos(lambda1), sin(phi1), cos(phi1) * sin(lambda1));
+      vec3 p2 = vec3(cos(phi2) * cos(lambda2), sin(phi2), cos(phi2) * sin(lambda2));
 
-    Geometry<vec3> result;
+      Geometry<vec3> result;
 
-    // Start with first point exactly as provided
-    result.Vtx().push_back(A_ndc);
+      // Start with first point exactly as provided
+      result.Vtx().push_back(A_ndc);
 
-    // Interpolate interior points
-    for (int i = 1; i < segments; ++i) {
-      float t = i / (float)segments;
+      // Interpolate interior points
+      for (int i = 1; i < segments; ++i) {
+        float t = i / (float)segments;
 
-      float omega = acos(dot(p1, p2));
-      // Avoid division by zero if points are very close
-      if (omega < 1e-6) {
-        vec3 pi = p1 * (1-t) + p2 * t; // Linear interpolation for close points
-        pi = normalize(pi); // Ensure point is on sphere
-      } else {
-        vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
+        float omega = acos(dot(p1, p2));
+        // Avoid division by zero if points are very close
+        if (omega < 1e-6) {
+          vec3 pi = p1 * (1-t) + p2 * t; // Linear interpolation for close points
+          pi = normalize(pi); // Ensure point is on sphere
+        } else {
+          vec3 pi = (sin((1 - t) * omega) * p1 + sin(t * omega) * p2) / sin(omega);
 
-        // Convert back to Mercator projection
-        float lat = asin(pi.y);
-        float lon = atan2(pi.z, pi.x);
+          // Convert back to Mercator projection
+          float lat = asin(pi.y);
+          float lon = atan2(pi.z, pi.x);
 
-        // Convert to NDC using the same scale as in onMousePressed
-        float x = lon / M_PI;
-        float y = lat * 2.0f / M_PI;
+          // Convert to NDC using the same scale as in onMousePressed
+          float x = lon / M_PI;
+          float y = lat * 2.0f / M_PI;
 
-        result.Vtx().push_back(vec3(x, y, 0));
+          result.Vtx().push_back(vec3(x, y, 0));
+        }
       }
+
+      // End with last point exactly as provided
+      result.Vtx().push_back(B_ndc);
+
+      return result;
     }
 
-    // End with last point exactly as provided
-    result.Vtx().push_back(B_ndc);
 
-    return result;
+  void onKeyboard(int key) override {
+    if (key == 'n') {
+      std::cout << "Menyomva";
+      timeOfDay += 1.0f;
+      if (timeOfDay >= 24.0f)
+        timeOfDay = 0.0f;
+      std::cout << "Time: " << timeOfDay << "h\n";
+      program->setUniform(timeOfDay, "time"); // Set the uniform here
+      refreshScreen();
+    }
   }
-
-
-
-    void onKeyboard(int key) override{
-      if (key == 'n') {
-          std::cout << "Menyomva";
-          timeOfDay += 1.0f;
-          if (timeOfDay >= 24.0f) timeOfDay = 0.0f;
-          std::cout << "Time: " << timeOfDay << "h\n";
-          program->setUniform(timeOfDay, "time"); // Set the uniform here
-          refreshScreen();
-      }
-  }
-
 
   void onMousePressed(MouseButton but, int pX, int pY) {
+    // Convert screen coordinates to NDC [-1,1]
     float ndcX = 2.0f * (pX / (float)winWidth) - 1.0f;
     float ndcY = 1.0f - 2.0f * (pY / (float)winHeight);
 
-    // Make sure this scales correctly to match what's expected in the line function
+    // DEGUB
+    std::cout << ndcX << " " << ndcY;
+
+    // Store the point
     vec3 newPoint(ndcX, ndcY, 0);
     vert->Vtx().push_back(newPoint);
 
+    // If we have at least two points, calculate the route
     if (vert->Vtx().size() >= 2) {
       vec3 a = vert->Vtx()[vert->Vtx().size() - 2];
       vec3 b = vert->Vtx()[vert->Vtx().size() - 1];
 
+      // Calculate and print distance
+      float lon1 = (a.x + 1.0f) * M_PI;
+      float lat1 = atan(sinh((1.0f - (a.y + 1.0f) / 2.0f) * M_PI));
+      float lon2 = (b.x + 1.0f) * M_PI;
+      float lat2 = atan(sinh((1.0f - (b.y + 1.0f) / 2.0f) * M_PI));
+
+      vec3 p1 = vec3(cos(lat1) * cos(lon1), sin(lat1), cos(lat1) * sin(lon1));
+      vec3 p2 = vec3(cos(lat2) * cos(lon2), sin(lat2), cos(lat2) * sin(lon2));
+
+      float omega = acos(dot(p1, p2));
+      float distance = omega * 40000.0f / (2.0f * M_PI);
+      std::cout << "Distance: " << distance << " km" << std::endl;
+
+      // Draw the route
       Geometry<vec3> arc = line(a, b);
       for (vec3 v : arc.Vtx())
         lines->Vtx().push_back(v);
